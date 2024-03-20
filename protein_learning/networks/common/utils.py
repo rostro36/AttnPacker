@@ -1,13 +1,12 @@
-import _datetime as datetime
-import time
-
-import torch
 import logging
 import sys
-from typing import NamedTuple
-import torch
-from torch import sin, cos, atan2, acos
+import time
 from functools import wraps
+from typing import NamedTuple
+
+import _datetime as datetime
+import torch
+from torch import acos, atan2, cos, sin
 
 VERBOSE = True
 
@@ -53,8 +52,8 @@ def calc_tm_torch(deviations, norm_len=None, reduce=True):
     if norm_len <= 15:
         d0 = 0.5
     else:
-        d0 = 1.24 * ((norm_len - 15.0) ** (1. / 3.)) - 1.8
-    per_res_scores = 1 / (1 + (torch.square(deviations) / (d0 ** 2)))
+        d0 = 1.24 * ((norm_len - 15.0) ** (1.0 / 3.0)) - 1.8
+    per_res_scores = 1 / (1 + (torch.square(deviations) / (d0**2)))
     return torch.mean(per_res_scores) if reduce else per_res_scores
 
 
@@ -63,7 +62,9 @@ def RMSD(c1, c2):
 
 
 def TM(c1, c2, norm_len=None):
-    return calc_tm_torch(torch.norm(c1.squeeze() - c2.squeeze(), dim=-1), norm_len=norm_len)
+    return calc_tm_torch(
+        torch.norm(c1.squeeze() - c2.squeeze(), dim=-1), norm_len=norm_len
+    )
 
 
 def timed(message="", self=None):
@@ -77,7 +78,7 @@ def timed(message="", self=None):
 
             stop = time.perf_counter_ns()
             if VERBOSE:
-                print(message, "in", (stop - start) / 10 ** 9, "seconds.")
+                print(message, "in", (stop - start) / 10**9, "seconds.")
             return value
 
         return wrapper
@@ -85,7 +86,14 @@ def timed(message="", self=None):
     return time_decorator
 
 
-def log(logger: logging.Logger, message, *args, verbose=logging.DEBUG, prefix='', std_out=False):
+def log(
+    logger: logging.Logger,
+    message,
+    *args,
+    verbose=logging.DEBUG,
+    prefix="",
+    std_out=False
+):
     try:
         msg = prefix + message.format(*args)
     except:  # noqa
@@ -97,11 +105,19 @@ def log(logger: logging.Logger, message, *args, verbose=logging.DEBUG, prefix=''
 
 def configure_logger(log_dir, level=logging.DEBUG):
     if log_dir is not None:
-        logging.basicConfig(filename=log_dir, level=level,
-                            format='%(asctime)s %(levelname)s %(name)s %(message)s', filemode='w+')
+        logging.basicConfig(
+            filename=log_dir,
+            level=level,
+            format="%(asctime)s %(levelname)s %(name)s %(message)s",
+            filemode="w+",
+        )
     else:
-        logging.basicConfig(stream=sys.stdout, level=level,
-                            format='%(asctime)s %(levelname)s %(name)s %(message)s', filemode='w+')
+        logging.basicConfig(
+            stream=sys.stdout,
+            level=level,
+            format="%(asctime)s %(levelname)s %(name)s %(message)s",
+            filemode="w+",
+        )
 
 
 def cast_torch_tensor(fn):
@@ -116,20 +132,18 @@ def cast_torch_tensor(fn):
 
 @cast_torch_tensor
 def rot_z(gamma):
-    return torch.tensor([
-        [cos(gamma), -sin(gamma), 0],
-        [sin(gamma), cos(gamma), 0],
-        [0, 0, 1]
-    ], dtype=gamma.dtype)
+    return torch.tensor(
+        [[cos(gamma), -sin(gamma), 0], [sin(gamma), cos(gamma), 0], [0, 0, 1]],
+        dtype=gamma.dtype,
+    )
 
 
 @cast_torch_tensor
 def rot_y(beta):
-    return torch.tensor([
-        [cos(beta), 0, sin(beta)],
-        [0, 1, 0],
-        [-sin(beta), 0, cos(beta)]
-    ], dtype=beta.dtype)
+    return torch.tensor(
+        [[cos(beta), 0, sin(beta)], [0, 1, 0], [-sin(beta), 0, cos(beta)]],
+        dtype=beta.dtype,
+    )
 
 
 def rot(alpha, beta, gamma):

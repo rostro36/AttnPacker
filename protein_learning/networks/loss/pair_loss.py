@@ -1,17 +1,16 @@
 """Pair Loss Functions and Networks"""
-from typing import Dict, Optional, Tuple, Union
-from typing import List
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn.functional as F  # noqa
 from einops import rearrange  # noqa
 from einops.layers.torch import Rearrange  # noqa
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 from protein_learning.common.data.data_types.model_output import ModelOutput
-from protein_learning.common.helpers import exists, safe_norm, default
+from protein_learning.common.helpers import default, exists, safe_norm
 from protein_learning.common.rigids import Rigids
-from protein_learning.networks.loss.utils import softmax_cross_entropy, partition
+from protein_learning.networks.loss.utils import partition, softmax_cross_entropy
 
 
 class PairDistLossNet(nn.Module):  # noqa
@@ -23,14 +22,14 @@ class PairDistLossNet(nn.Module):  # noqa
     """
 
     def __init__(
-            self,
-            dim_in: int,
-            atom_tys: List[str],
-            step: float = 0.4,
-            d_min: float = 2.5,
-            d_max: float = 20,
-            use_hidden: bool = False,
-            smoothing: float = 0,
+        self,
+        dim_in: int,
+        atom_tys: List[str],
+        step: float = 0.4,
+        d_min: float = 2.5,
+        d_max: float = 20,
+        use_hidden: bool = False,
+        smoothing: float = 0,
     ):
         """
         :param dim_in: pair feature dimension
@@ -44,7 +43,9 @@ class PairDistLossNet(nn.Module):  # noqa
         **An extra bin for distances greater than d_max is also appended***
         """
         super().__init__()
-        assert len(atom_tys) % 2 == 0, f"must have even number of atom types, got: {atom_tys}"
+        assert (
+            len(atom_tys) % 2 == 0
+        ), f"must have even number of atom types, got: {atom_tys}"
         self.step, self.d_min, self.d_max = step, d_min, d_max
         self._bins = torch.arange(self.d_min, self.d_max + 2 * step, step=step)
         self.atom_ty_set = set(atom_tys)
@@ -56,7 +57,7 @@ class PairDistLossNet(nn.Module):  # noqa
             nn.Linear(dim_in, dim_hidden),
             nn.GELU() if use_hidden else nn.Identity(),
             nn.Linear(dim_hidden, dim_hidden) if use_hidden else nn.Identity(),
-            Rearrange("b n m (p d) -> b n m p d", p=len(self.atom_tys))
+            Rearrange("b n m (p d) -> b n m p d", p=len(self.atom_tys)),
         )
         self.loss_fn = softmax_cross_entropy
         self.smoothing = smoothing
@@ -75,22 +76,34 @@ class PairDistLossNet(nn.Module):  # noqa
         labels = torch.round(dists / self.step).long()
         return F.one_hot(labels, num_classes=self._bins.numel())
 
-    def _get_true_dists_n_masks(self, atom_ty_map: Dict[str, int],
-                                atom_coords: Tensor,
-                                atom_masks: Optional[Tensor] = None,
-                                pair_mask: Optional[Tensor] = None,
-                                ) -> Tuple[Tensor, Optional[Tensor]]:
+    def _get_true_dists_n_masks(
+        self,
+        atom_ty_map: Dict[str, int],
+        atom_coords: Tensor,
+        atom_masks: Optional[Tensor] = None,
+        pair_mask: Optional[Tensor] = None,
+    ) -> Tuple[Tensor, Optional[Tensor]]:
         a1_a2_dists, a1_a2_masks = [], []
         with torch.no_grad():
             for (a1, a2) in self.atom_tys:
                 a1_pos, a2_pos = atom_ty_map[a1], atom_ty_map[a2]
-                a1_coords, a2_coords = atom_coords[:, :, a1_pos], atom_coords[:, :, a2_pos]
+                a1_coords, a2_coords = (
+                    atom_coords[:, :, a1_pos],
+                    atom_coords[:, :, a2_pos],
+                )
 
                 # add mask
                 if exists(atom_masks):
-                    a1_mask, a2_mask = atom_masks[:, :, a1_pos], atom_masks[:, :, a2_pos]
+                    a1_mask, a2_mask = (
+                        atom_masks[:, :, a1_pos],
+                        atom_masks[:, :, a2_pos],
+                    )
                     a1_a2_mask = torch.einsum("b i, b j -> b i j", a1_mask, a2_mask)
-                    a1_a2_mask = torch.logical_and(a1_a2_mask, pair_mask) if exists(pair_mask) else a1_a2_mask
+                    a1_a2_mask = (
+                        torch.logical_and(a1_a2_mask, pair_mask)
+                        if exists(pair_mask)
+                        else a1_a2_mask
+                    )
                     a1_a2_masks.append(a1_a2_mask)
 
                 a1_a2_dist = torch.cdist(a1_coords, a2_coords)
@@ -102,14 +115,14 @@ class PairDistLossNet(nn.Module):  # noqa
         return full_dists.detach(), full_mask
 
     def forward(
-            self,
-            pair_output: Tensor,
-            atom_ty_map: Dict[str, int],
-            atom_coords: Tensor,
-            atom_masks: Optional[Tensor] = None,
-            pair_mask: Optional[Tensor] = None,
-            reduce: bool = True,
-            return_logits: bool = False,
+        self,
+        pair_output: Tensor,
+        atom_ty_map: Dict[str, int],
+        atom_coords: Tensor,
+        atom_masks: Optional[Tensor] = None,
+        pair_mask: Optional[Tensor] = None,
+        reduce: bool = True,
+        return_logits: bool = False,
     ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         """
         :param pair_output: Output pair features
@@ -132,25 +145,30 @@ class PairDistLossNet(nn.Module):  # noqa
             return self.net(pair_output), full_mask
         labels = self._to_labels(full_dists)
         if reduce:
-            return torch.mean(self.loss_fn(self.net(pair_output)[full_mask], labels[full_mask]))
+            return torch.mean(
+                self.loss_fn(self.net(pair_output)[full_mask], labels[full_mask])
+            )
         else:
             return self.loss_fn(self.net(pair_output), labels), full_mask
 
     def forward_from_output(
-            self,
-            output: ModelOutput,
-            reduce: bool = True,
-            pair_feats: Optional[Tensor] = None,
-            return_logits: bool = False,
-            **kwargs
-    ) -> Union[
-        Tensor, Tuple[Tensor, Tensor]]:
+        self,
+        output: ModelOutput,
+        reduce: bool = True,
+        pair_feats: Optional[Tensor] = None,
+        return_logits: bool = False,
+        **kwargs,
+    ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         """Run forward from ModelOutput Object"""
         atom_tys = list(self.atom_ty_set)
         atom_ty_map = {a: i for i, a in enumerate(atom_tys)}
         pair_mask = getattr(output, "pair_mask", None)
-        native_atom_coords = output.get_atom_coords(native=True, atom_tys=atom_tys).unsqueeze(0)
-        native_atom_mask = output.get_atom_mask(native=True, atom_tys=atom_tys).unsqueeze(0)
+        native_atom_coords = output.get_atom_coords(
+            native=True, atom_tys=atom_tys
+        ).unsqueeze(0)
+        native_atom_mask = output.get_atom_mask(
+            native=True, atom_tys=atom_tys
+        ).unsqueeze(0)
 
         return self.forward(
             pair_output=default(pair_feats, output.pair_output),
@@ -164,16 +182,15 @@ class PairDistLossNet(nn.Module):  # noqa
 
 
 class PredictedAlignedErrorLossNet(nn.Module):
-    """Predicted Aligned Error
-    """
+    """Predicted Aligned Error"""
 
     def __init__(
-            self,
-            dim_in: int,
-            atom_tys: List[str],
-            step: float = 0.5,
-            d_max: float = 12,
-            smoothing: float = 0,
+        self,
+        dim_in: int,
+        atom_tys: List[str],
+        step: float = 0.5,
+        d_max: float = 12,
+        smoothing: float = 0,
     ):
         """
         :param dim_in: pair feature dimension
@@ -196,7 +213,7 @@ class PredictedAlignedErrorLossNet(nn.Module):
             nn.Linear(dim_in, 128),
             nn.GELU(),
             nn.Linear(128, self._bins.numel() * len(self.atom_tys)),
-            Rearrange("b n m (p d) -> b n m p d", p=len(self.atom_tys))
+            Rearrange("b n m (p d) -> b n m p d", p=len(self.atom_tys)),
         )
         self.loss_fn = softmax_cross_entropy
         self.smoothing = smoothing
@@ -217,14 +234,16 @@ class PredictedAlignedErrorLossNet(nn.Module):
         labels = F.one_hot(torch.argmin(nearest_bins, dim=-1), bins.numel())
         return labels
 
-    def _get_true_dists_n_masks(self, atom_ty_map: Dict[str, int],
-                                true_coords: Tensor,
-                                pred_coords: Tensor,
-                                true_rigids: Optional[Rigids],
-                                pred_rigids: Optional[Rigids],
-                                atom_masks: Optional[Tensor] = None,
-                                pair_mask: Optional[Tensor] = None,
-                                ) -> Tuple[Tensor, Optional[Tensor]]:
+    def _get_true_dists_n_masks(
+        self,
+        atom_ty_map: Dict[str, int],
+        true_coords: Tensor,
+        pred_coords: Tensor,
+        true_rigids: Optional[Rigids],
+        pred_rigids: Optional[Rigids],
+        atom_masks: Optional[Tensor] = None,
+        pair_mask: Optional[Tensor] = None,
+    ) -> Tuple[Tensor, Optional[Tensor]]:
         dists, masks = [], []
         with torch.no_grad():
             for aty in self.atom_tys:
@@ -232,7 +251,9 @@ class PredictedAlignedErrorLossNet(nn.Module):
                 c_true, c_pred = true_coords[:, :, a_pos], pred_coords[:, :, a_pos]
                 if exists(pred_rigids):
                     assert exists(true_rigids)
-                    c_true, c_pred = map(lambda x: rearrange(x, "b n c-> b () n c"), (c_true, c_pred))
+                    c_true, c_pred = map(
+                        lambda x: rearrange(x, "b n c-> b () n c"), (c_true, c_pred)
+                    )
                     rel_true = true_rigids.apply_inverse(c_true)
                     rel_pred = pred_rigids.apply_inverse(c_pred)
                     a_dists = safe_norm(rel_pred, dim=-1) - safe_norm(rel_true, dim=-1)
@@ -245,7 +266,11 @@ class PredictedAlignedErrorLossNet(nn.Module):
                 if exists(atom_masks):
                     mask = atom_masks[:, :, a_pos]
                     mask = torch.einsum("b i, b j -> b i j", mask, mask)
-                    mask = torch.logical_and(mask, pair_mask) if exists(pair_mask) else mask
+                    mask = (
+                        torch.logical_and(mask, pair_mask)
+                        if exists(pair_mask)
+                        else mask
+                    )
                     masks.append(mask)
 
             full_dists = torch.cat([x.unsqueeze(-1) for x in dists], dim=-1)
@@ -255,17 +280,17 @@ class PredictedAlignedErrorLossNet(nn.Module):
         return full_dists.detach(), full_mask
 
     def forward(
-            self,
-            pair_output: Tensor,
-            atom_ty_map: Dict[str, int],
-            true_coords: Tensor,
-            pred_coords: Tensor,
-            true_rigids: Optional[Rigids],
-            pred_rigids: Optional[Rigids],
-            atom_masks: Optional[Tensor] = None,
-            pair_mask: Optional[Tensor] = None,
-            reduce: bool = True,
-            return_logits: bool = False,
+        self,
+        pair_output: Tensor,
+        atom_ty_map: Dict[str, int],
+        true_coords: Tensor,
+        pred_coords: Tensor,
+        true_rigids: Optional[Rigids],
+        pred_rigids: Optional[Rigids],
+        atom_masks: Optional[Tensor] = None,
+        pair_mask: Optional[Tensor] = None,
+        reduce: bool = True,
+        return_logits: bool = False,
     ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         """
         :param pair_output: Output pair features
@@ -292,35 +317,40 @@ class PredictedAlignedErrorLossNet(nn.Module):
 
         labels = self._to_labels(full_dists)
         if reduce:
-            return torch.mean(self.loss_fn(self.net(pair_output)[full_mask], labels[full_mask]))
+            return torch.mean(
+                self.loss_fn(self.net(pair_output)[full_mask], labels[full_mask])
+            )
         else:
             return self.loss_fn(self.net(pair_output), labels), full_mask
 
     def forward_from_output(
-            self,
-            output: ModelOutput,
-            true_rigids: Optional[Rigids] = None,
-            reduce: bool = True,
-            return_logits: bool = False,
-            use_rigids=False,
-            **kwargs
+        self,
+        output: ModelOutput,
+        true_rigids: Optional[Rigids] = None,
+        reduce: bool = True,
+        return_logits: bool = False,
+        use_rigids=False,
+        **kwargs,
     ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         """Run forward from ModelOutput Object"""
         atom_tys = self.atom_tys
         atom_ty_map = {a: i for i, a in enumerate(atom_tys)}
         pair_mask = getattr(output, "pair_mask", None)
-        loss_input = output.get_pred_and_native_coords_and_mask(atom_tys=atom_tys, align_by_kabsch=False)
+        loss_input = output.get_pred_and_native_coords_and_mask(
+            atom_tys=atom_tys, align_by_kabsch=False
+        )
         pred_coords, native_coords, mask = loss_input
         pred_rigids = default(
-            getattr(output, "pred_rigids", None),
-            getattr(output, "rigids", None)
+            getattr(output, "pred_rigids", None), getattr(output, "rigids", None)
         )
         if not exists(true_rigids):
             true_rigids = default(
-                getattr(output, 'true_rigids', None),
-                getattr(output.model_input, "true_rigids", None)
+                getattr(output, "true_rigids", None),
+                getattr(output.model_input, "true_rigids", None),
             )
-        native_atom_mask = output.get_atom_mask(native=True, atom_tys=atom_tys).unsqueeze(0)
+        native_atom_mask = output.get_atom_mask(
+            native=True, atom_tys=atom_tys
+        ).unsqueeze(0)
 
         return self.forward(
             pair_output=output.pair_output,
@@ -328,7 +358,7 @@ class PredictedAlignedErrorLossNet(nn.Module):
             true_rigids=true_rigids if use_rigids else None,
             true_coords=native_coords,
             pred_rigids=pred_rigids if use_rigids else None,
-            pred_coords=pred_coords ,
+            pred_coords=pred_coords,
             atom_masks=native_atom_mask,
             pair_mask=pair_mask,
             reduce=reduce,

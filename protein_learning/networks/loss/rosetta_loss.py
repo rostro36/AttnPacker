@@ -7,20 +7,26 @@ from pyrosetta import *
 from pyrosetta.rosetta import *
 from pyrosetta.rosetta.numeric import xyzVector_double_t as xyz_vec
 
-from protein_learning.common.protein_constants import N_BB_ATOMS
 from protein_learning.common.helpers import default
-from protein_learning.protein_utils.dihedral.orientation_utils import signed_dihedral_4, get_bb_dihedral
+from protein_learning.common.protein_constants import N_BB_ATOMS
+from protein_learning.protein_utils.dihedral.orientation_utils import (
+    get_bb_dihedral,
+    signed_dihedral_4,
+)
 
 DSSP = protocols.moves.DsspMover()  # noqa
 init(
-    '-out:levels core.scoring.dssp:error'
-    ' core.scoring.saxs.FormFactorManager:error'
-    ' protocols.DsspMover:error'
-    ' basic.io.database:error'
-    ' core.scoring.saxs.SAXSEnergy:error')
+    "-out:levels core.scoring.dssp:error"
+    " core.scoring.saxs.FormFactorManager:error"
+    " protocols.DsspMover:error"
+    " basic.io.database:error"
+    " core.scoring.saxs.SAXSEnergy:error"
+)
 
-fa_score_types = "fa_atr fa_rep fa_sol lk_ball_wtd fa_elec hbond_bb_sc " \
-                 "hbond_sc p_aa_pp rama_prepro omega fa_dun".split(" ")
+fa_score_types = (
+    "fa_atr fa_rep fa_sol lk_ball_wtd fa_elec hbond_bb_sc "
+    "hbond_sc p_aa_pp rama_prepro omega fa_dun".split(" ")
+)
 
 # uncomment any of the terms below to activate
 # note that cart bonded terms take a long time to compute
@@ -95,12 +101,12 @@ def set_pose_coords(pose, coords):
     _coords = map(lambda x: _to_numpy(x), coords)
     N, CA, CB, C, O = _coords  # noqa
     for i in range(len(coords) // N_BB_ATOMS):
-        pose.residue(i + 1).set_xyz('N', xyz_vec(*N[i]))
-        pose.residue(i + 1).set_xyz('CA', xyz_vec(*CA[i]))
-        if seq[i] != 'G':
-            pose.residue(i + 1).set_xyz('CB', xyz_vec(*CB[i]))
-        pose.residue(i + 1).set_xyz('C', xyz_vec(*C[i]))
-        pose.residue(i + 1).set_xyz('O', xyz_vec(*O[i]))
+        pose.residue(i + 1).set_xyz("N", xyz_vec(*N[i]))
+        pose.residue(i + 1).set_xyz("CA", xyz_vec(*CA[i]))
+        if seq[i] != "G":
+            pose.residue(i + 1).set_xyz("CB", xyz_vec(*CB[i]))
+        pose.residue(i + 1).set_xyz("C", xyz_vec(*C[i]))
+        pose.residue(i + 1).set_xyz("O", xyz_vec(*O[i]))
     # pose will not update internal coords from explicit
     # coordinate change - only happens for bb torsion change
     pose.set_phi(1, pose.phi(1))
@@ -122,23 +128,30 @@ def safe_cast(arr):
     return arr
 
 
-def rosetta_to_3Dtensor(arr, device='cpu', dtype=DEFAULT_DTYPE):
+def rosetta_to_3Dtensor(arr, device="cpu", dtype=DEFAULT_DTYPE):
     # rosetta score array is a numpy array of tuples.
     # we must first convert to a numpy float array before casting to tensor
     np_arr = np.array([[list(x) for x in y] for y in arr], dtype=np.float32)
     return safe_cast(torch.tensor(np_arr, device=device, dtype=dtype))
 
 
-def rosetta_to_2Dtensor(arr, device='cpu', dtype=DEFAULT_DTYPE):
+def rosetta_to_2Dtensor(arr, device="cpu", dtype=DEFAULT_DTYPE):
     np_arr = np.array([list(x) for x in arr], dtype=np.float32)
     return safe_cast(torch.tensor(np_arr, device=device, dtype=dtype))
 
 
-def _get_residue_ens(pose, device='cpu', dtype=torch.float32):
-    residue_total_ens = pyrosetta.bindings.energies.residue_total_energies_array(pose.energies())
-    residue_pair_ens = pyrosetta.bindings.energies.residue_pair_energies_array(pose.energies())
-    return rosetta_to_2Dtensor(residue_total_ens, device=device, dtype=dtype), \
-           rosetta_to_3Dtensor(residue_pair_ens, device=device, dtype=dtype)  # noqa
+def _get_residue_ens(pose, device="cpu", dtype=torch.float32):
+    residue_total_ens = pyrosetta.bindings.energies.residue_total_energies_array(
+        pose.energies()
+    )
+    residue_pair_ens = pyrosetta.bindings.energies.residue_pair_energies_array(
+        pose.energies()
+    )
+    return rosetta_to_2Dtensor(
+        residue_total_ens, device=device, dtype=dtype
+    ), rosetta_to_3Dtensor(
+        residue_pair_ens, device=device, dtype=dtype
+    )  # noqa
 
 
 class RosettaScore:
@@ -146,8 +159,8 @@ class RosettaScore:
         self.sfxn = init_cen_sfxn() if backbone else init_fa_sfxn()
         self.use_cen = backbone
         self.switch = SwitchResidueTypeSetMover("centroid")  # noqa
-        self._pose = pose_from_sequence('AAA')
-        tmp_res, tmp_pair = self.get_energies('AAAA', None)
+        self._pose = pose_from_sequence("AAA")
+        tmp_res, tmp_pair = self.get_energies("AAAA", None)
         self.num_res_score_terms = tmp_res.shape[-1]
         self.num_res_pair_score_terms = tmp_pair.shape[-1]
 
@@ -165,14 +178,18 @@ class RosettaScore:
         return pose
 
     def get_energies(self, seq, coords, device=None, dtype=None, pdb=None):
-        _device = 'cpu' if coords is None else coords[0].device
+        _device = "cpu" if coords is None else coords[0].device
         device = default(device, _device)
-        pose = self._get_pose(seq, coords.squeeze() if torch.is_tensor(coords) else coords, pdb=pdb)
+        pose = self._get_pose(
+            seq, coords.squeeze() if torch.is_tensor(coords) else coords, pdb=pdb
+        )
         self.sfxn(pose)  # populate pose energies object with scores
         res, pair = _get_residue_ens(pose, device=device, dtype=dtype)
         return res, pair
 
-    def get_energies_and_dssp(self, seq, coords, device=None, dtype=torch.float32, pdb=None):
+    def get_energies_and_dssp(
+        self, seq, coords, device=None, dtype=torch.float32, pdb=None
+    ):
         device = default(device, coords[0].device)
         dtype = default(dtype, coords[0].dtype)
         pose = self._get_pose(seq, coords, pdb=pdb)

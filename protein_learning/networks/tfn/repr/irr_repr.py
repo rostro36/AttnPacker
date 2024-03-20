@@ -4,20 +4,22 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch import sin, cos, atan2, acos
+from torch import acos, atan2, cos, sin
 
 from protein_learning.networks.common.helpers.torch_utils import cast_torch_tensor
 from protein_learning.networks.common.utils import default
 from protein_learning.networks.tfn.repr.fiber import to_order
-from protein_learning.networks.tfn.repr.spherical_harmonics import get_spherical_harmonics
+from protein_learning.networks.tfn.repr.spherical_harmonics import (
+    get_spherical_harmonics,
+)
 
-DATA_PATH = path = Path(os.path.dirname(__file__)) / 'data'
+DATA_PATH = path = Path(os.path.dirname(__file__)) / "data"
 
 try:
-    path = DATA_PATH / 'J_dense.pt'
+    path = DATA_PATH / "J_dense.pt"
     Jd = torch.load(str(path))
-except: # noqa
-    path = DATA_PATH / 'J_dense.npy'
+except:  # noqa
+    path = DATA_PATH / "J_dense.npy"
     Jd_np = np.load(str(path), allow_pickle=True)
     Jd = list(map(torch.from_numpy, Jd_np))
 
@@ -59,33 +61,31 @@ def irr_repr(order, alpha, beta, gamma, dtype=None):
 
 @cast_torch_tensor
 def rot_z(gamma):
-    '''
+    """
     Rotation around Z axis
-    '''
-    return torch.tensor([
-        [cos(gamma), -sin(gamma), 0],
-        [sin(gamma), cos(gamma), 0],
-        [0, 0, 1]
-    ], dtype=gamma.dtype)
+    """
+    return torch.tensor(
+        [[cos(gamma), -sin(gamma), 0], [sin(gamma), cos(gamma), 0], [0, 0, 1]],
+        dtype=gamma.dtype,
+    )
 
 
 @cast_torch_tensor
 def rot_y(beta):
-    '''
+    """
     Rotation around Y axis
-    '''
-    return torch.tensor([
-        [cos(beta), 0, sin(beta)],
-        [0, 1, 0],
-        [-sin(beta), 0, cos(beta)]
-    ], dtype=beta.dtype)
+    """
+    return torch.tensor(
+        [[cos(beta), 0, sin(beta)], [0, 1, 0], [-sin(beta), 0, cos(beta)]],
+        dtype=beta.dtype,
+    )
 
 
 @cast_torch_tensor
 def x_to_alpha_beta(x):
-    '''
+    """
     Convert point (x, y, z) on the sphere into (alpha, beta)
-    '''
+    """
     x = x / torch.norm(x)
     beta = acos(x[2])
     alpha = atan2(x[1], x[0])
@@ -93,9 +93,9 @@ def x_to_alpha_beta(x):
 
 
 def rot(alpha, beta, gamma):
-    '''
+    """
     ZYZ Euler angles rotation
-    '''
+    """
     return rot_z(alpha) @ rot_y(beta) @ rot_z(gamma)
 
 
@@ -104,7 +104,7 @@ def compose(a1, b1, c1, a2, b2, c2):
     (a, b, c) = (a1, b1, c1) composed with (a2, b2, c2)
     """
     comp = rot(a1, b1, c1) @ rot(a2, b2, c2)
-    xyz = comp @ torch.tensor([0, 0, 1.])
+    xyz = comp @ torch.tensor([0, 0, 1.0])
     a, b = x_to_alpha_beta(xyz)
     rotz = rot(0, -b, -a) @ comp
     c = atan2(rotz[1, 0], rotz[0, 0])

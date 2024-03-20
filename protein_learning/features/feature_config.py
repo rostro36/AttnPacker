@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import NamedTuple, List, Tuple, Union, Optional
-import numpy as np 
+from typing import List, NamedTuple, Optional, Tuple, Union
+
+import numpy as np
+
 from protein_learning.common.protein_constants import AA_ALPHABET
-from protein_learning.features.constants import SMALL_SEP_BINS, DEFAULT_PW_DIST_RADII
+from protein_learning.features.constants import DEFAULT_PW_DIST_RADII, SMALL_SEP_BINS
 
 
 class FeatureDescriptor(NamedTuple):
     """Descriptor for a given feature"""
+
     name: FeatureName
     ty: FeatureTy
     encode_dim: int
@@ -25,6 +28,7 @@ class FeatureDescriptor(NamedTuple):
 
 class InputFeatureConfig(NamedTuple):
     """Config Input Features"""
+
     # Global settings
     # pad embeddings with an extra bin (n_classes+1) - can be used
     # in conjunction with sequence or coordinate masking, e.g.
@@ -54,7 +58,7 @@ class InputFeatureConfig(NamedTuple):
 
     # SC Dihedral (SCALAR)
     include_sc_dihedral: bool = False
-    sc_dihedral_noise: List[float] = [0,0]
+    sc_dihedral_noise: List[float] = [0, 0]
 
     # Centrality (SCALAR)
     embed_centrality: bool = False
@@ -111,9 +115,11 @@ class InputFeatureConfig(NamedTuple):
     @property
     def include_res_ty(self):
         """Whether to include residue type features"""
-        return self.joint_embed_res_pair_rel_sep \
-               or self.embed_res_ty \
-               or self.one_hot_res_ty  # noqa
+        return (
+            self.joint_embed_res_pair_rel_sep
+            or self.embed_res_ty
+            or self.one_hot_res_ty
+        )  # noqa
 
     @property
     def include_rel_pos(self):
@@ -123,24 +129,36 @@ class InputFeatureConfig(NamedTuple):
     @property
     def include_bb_dihedral(self):
         """Whether to include bb dihedral features"""
-        return self.embed_bb_dihedral or self.one_hot_bb_dihedral or \
-               self.fourier_encode_bb_dihedral  # noqa
+        return (
+            self.embed_bb_dihedral
+            or self.one_hot_bb_dihedral
+            or self.fourier_encode_bb_dihedral
+        )  # noqa
 
     @property
     def include_centrality(self):
         """Whether to include centrality features"""
-        return self.embed_centrality or self.one_hot_centrality or self.rbf_encode_centrality
+        return (
+            self.embed_centrality
+            or self.one_hot_centrality
+            or self.rbf_encode_centrality
+        )
 
     @property
     def include_rel_sep(self):
         """Whether to include relative separation features"""
-        return self.one_hot_rel_sep or self.embed_rel_sep \
-               or self.joint_embed_res_pair_rel_sep  # noqa
+        return (
+            self.one_hot_rel_sep
+            or self.embed_rel_sep
+            or self.joint_embed_res_pair_rel_sep
+        )  # noqa
 
     @property
     def include_rel_dist(self):
         """Whether to include relative distance features"""
-        return self.one_hot_rel_dist or self.embed_rel_dist or self.rbf_encode_rel_distance
+        return (
+            self.one_hot_rel_dist or self.embed_rel_dist or self.rbf_encode_rel_distance
+        )
 
     @property
     def rel_dist_atom_pairs(self) -> List[Tuple[str, str]]:
@@ -155,8 +173,11 @@ class InputFeatureConfig(NamedTuple):
         Note: CB atom must be present to sue these features - can add
         "impute_cb" flag to data loader if this atom is not available.
         """
-        return self.embed_tr_rosetta_ori or self.fourier_encode_tr_rosetta_ori \
-               or self.one_hot_tr_rosetta_ori  # noqa
+        return (
+            self.embed_tr_rosetta_ori
+            or self.fourier_encode_tr_rosetta_ori
+            or self.one_hot_tr_rosetta_ori
+        )  # noqa
 
     @property
     def include_rel_ori(self):
@@ -184,7 +205,7 @@ class InputFeatureConfig(NamedTuple):
                     ty=FeatureTy.RESIDUE,
                     encode_dim=3,
                     embed_dim=self.sec_struct_embed_dim,
-                    embed_tys=[FeatureEmbeddingTy.EMBED]
+                    embed_tys=[FeatureEmbeddingTy.EMBED],
                 )
             )
 
@@ -196,12 +217,9 @@ class InputFeatureConfig(NamedTuple):
                     encode_dim=len(AA_ALPHABET),
                     embed_dim=self.res_ty_embed_dim,
                     embed_tys=_get_encoding_tys(
-                        embed=self.embed_res_ty,
-                        one_hot=self.one_hot_res_ty
-                    )
-
+                        embed=self.embed_res_ty, one_hot=self.one_hot_res_ty
+                    ),
                 )
-
             )
 
         if self.include_rel_pos:
@@ -212,11 +230,9 @@ class InputFeatureConfig(NamedTuple):
                     encode_dim=self.res_rel_pos_encode_dim,
                     embed_dim=self.res_rel_pos_embed_dim,
                     embed_tys=_get_encoding_tys(
-                        embed=self.embed_res_rel_pos,
-                        one_hot=self.one_hot_res_rel_pos
-                    )
+                        embed=self.embed_res_rel_pos, one_hot=self.one_hot_res_rel_pos
+                    ),
                 )
-
             )
 
         if self.include_bb_dihedral:
@@ -232,7 +248,7 @@ class InputFeatureConfig(NamedTuple):
                         fourier=self.fourier_encode_bb_dihedral,
                     ),
                     mult=3,
-                    n_fourier_feats=self.n_bb_dihedral_fourier_feats
+                    n_fourier_feats=self.n_bb_dihedral_fourier_feats,
                 ),
             )
 
@@ -279,7 +295,15 @@ class InputFeatureConfig(NamedTuple):
                         rbf=self.rbf_encode_rel_distance,
                     ),
                     mult=len(self.rel_dist_atom_tys) // 2,
-                    rbf_sigma=np.mean([(x-y) for x,y in zip(self.rel_dist_rbf_radii[1:],self.rel_dist_rbf_radii[:-1])]),
+                    rbf_sigma=np.mean(
+                        [
+                            (x - y)
+                            for x, y in zip(
+                                self.rel_dist_rbf_radii[1:],
+                                self.rel_dist_rbf_radii[:-1],
+                            )
+                        ]
+                    ),
                     rbf_radii=self.rel_dist_rbf_radii,
                 ),
             )
@@ -298,7 +322,6 @@ class InputFeatureConfig(NamedTuple):
                     ),
                     mult=3,
                     n_fourier_feats=self.tr_rosetta_fourier_feats,
-
                 ),
             )
 
@@ -309,7 +332,7 @@ class InputFeatureConfig(NamedTuple):
                     ty=FeatureTy.PAIR,
                     encode_dim=4,
                     embed_dim=4,
-                    embed_tys=[FeatureEmbeddingTy.NONE]
+                    embed_tys=[FeatureEmbeddingTy.NONE],
                 ),
             )
 
@@ -320,7 +343,7 @@ class InputFeatureConfig(NamedTuple):
                     ty=FeatureTy.PAIR,
                     encode_dim=3,
                     embed_dim=3,
-                    embed_tys=[FeatureEmbeddingTy.NONE]
+                    embed_tys=[FeatureEmbeddingTy.NONE],
                 ),
             )
 
@@ -331,7 +354,7 @@ class InputFeatureConfig(NamedTuple):
                     ty=FeatureTy.PAIR,
                     encode_dim=5,
                     embed_dim=5,
-                    embed_tys=[FeatureEmbeddingTy.ONEHOT]
+                    embed_tys=[FeatureEmbeddingTy.ONEHOT],
                 ),
             )
 
@@ -342,7 +365,7 @@ class InputFeatureConfig(NamedTuple):
                     ty=FeatureTy.PAIR,
                     encode_dim=self.extra_pair_dim,
                     embed_dim=self.extra_pair_dim,
-                    embed_tys=[FeatureEmbeddingTy.NONE]
+                    embed_tys=[FeatureEmbeddingTy.NONE],
                 ),
             )
 
@@ -353,7 +376,7 @@ class InputFeatureConfig(NamedTuple):
                     ty=FeatureTy.RESIDUE,
                     encode_dim=self.extra_residue_dim,
                     embed_dim=self.extra_residue_dim,
-                    embed_tys=[FeatureEmbeddingTy.NONE]
+                    embed_tys=[FeatureEmbeddingTy.NONE],
                 ),
             )
 
@@ -402,18 +425,20 @@ class InputFeatureConfig(NamedTuple):
 
 
 class FeatureTy(Enum):
-    """Feature Type flag
-    """
+    """Feature Type flag"""
+
     RESIDUE, COORD, PAIR = 1, 2, 3
 
 
 class FeatureEmbeddingTy(Enum):
-    """Feature Type flag
-    """
+    """Feature Type flag"""
+
     RBF, ONEHOT, EMBED, FOURIER, NONE = 0, 1, 2, 3, 4
 
 
-def _get_encoding_tys(one_hot=False, embed=False, rbf=False, fourier=False) -> List[FeatureEmbeddingTy]:
+def _get_encoding_tys(
+    one_hot=False, embed=False, rbf=False, fourier=False
+) -> List[FeatureEmbeddingTy]:
     """Encoding type for feature"""
     encoding_tys = []
     if one_hot:
@@ -428,8 +453,8 @@ def _get_encoding_tys(one_hot=False, embed=False, rbf=False, fourier=False) -> L
 
 
 class FeatureName(Enum):
-    """Identifiers for each feature type
-    """
+    """Identifiers for each feature type"""
+
     REL_POS = "rel_pos"
     REL_SEP = "rel_sep"
     REL_DIST = "rel_dist"
@@ -443,7 +468,7 @@ class FeatureName(Enum):
     EXTRA_RES = "extra_res"
     EXTRA_PAIR = "extra_pair"
     SS = "sec_struct"
-    SC_DIHEDRAL="sc_dihedral"
+    SC_DIHEDRAL = "sc_dihedral"
 
 
 FEATURE_NAMES = [

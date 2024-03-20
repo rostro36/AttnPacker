@@ -1,9 +1,9 @@
 """Structure Prediction Model"""
 from abc import abstractmethod
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 import torch
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 from protein_learning.common.data.data_types.model_input import ModelInput
 from protein_learning.common.data.data_types.model_loss import ModelLoss
@@ -92,7 +92,9 @@ class ProteinModel(nn.Module):
         pass
 
     @abstractmethod
-    def get_model_output(self, model_input: ModelInput, fwd_output: Any, fwd_input: Dict, **kwargs) -> ModelOutput:
+    def get_model_output(
+        self, model_input: ModelInput, fwd_output: Any, fwd_input: Dict, **kwargs
+    ) -> ModelOutput:
         """Get Model output object from
 
         (1) output of model forward

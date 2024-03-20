@@ -2,20 +2,19 @@
 from __future__ import annotations
 
 import random
-from typing import List, Optional, Callable, Dict
+from typing import Callable, Dict, List, Optional
 
 import torch
-from einops import repeat, rearrange  # noqa
-from einops import repeat, rearrange  # noqa
+from einops import rearrange, repeat  # noqa
 from torch import Tensor
 
 from protein_learning.common.global_constants import get_logger
-from protein_learning.common.helpers import exists, default
+from protein_learning.common.helpers import default, exists
 from protein_learning.features.masking.masking_utils import (
-    sample_strategy,
     cast_list,
-    norm_weights,
     get_partition_mask,
+    norm_weights,
+    sample_strategy,
 )
 
 logger = get_logger(__name__)
@@ -42,10 +41,10 @@ def inter_chain_one_to_all_mask(n_chains) -> Tensor:
 
 
 def get_inter_chain_mask_strats_n_weights(
-        inter_random_mask_weight: float = 0,
-        inter_one_to_all_mask_weight: float = 0,
-        inter_full_mask_weight: float = 0,
-        inter_no_mask_weight: float = 0,
+    inter_random_mask_weight: float = 0,
+    inter_one_to_all_mask_weight: float = 0,
+    inter_full_mask_weight: float = 0,
+    inter_no_mask_weight: float = 0,
 ):
     """Retrieve list of strategies and weights"""
     strats, weights = [], []
@@ -67,15 +66,17 @@ class InterChainMaskGenerator:
     """Generates and applies masks for inter-chain features"""
 
     def __init__(
-            self,
-            strats: Optional[List[Callable]] = None,
-            weights: Optional[List[float]] = None,
-            mask_transform: Optional[Callable] = None,
-            strat_n_weight_kwargs: Optional[Dict] = None
+        self,
+        strats: Optional[List[Callable]] = None,
+        weights: Optional[List[float]] = None,
+        mask_transform: Optional[Callable] = None,
+        strat_n_weight_kwargs: Optional[Dict] = None,
     ):
         if not exists(strats):
             assert exists(strat_n_weight_kwargs)
-            strats, weights = get_inter_chain_mask_strats_n_weights(**strat_n_weight_kwargs)
+            strats, weights = get_inter_chain_mask_strats_n_weights(
+                **strat_n_weight_kwargs
+            )
         self.strats = cast_list(strats) if exists(strats) else None
         self.weights = norm_weights(cast_list(weights)) if exists(weights) else None
         self.mask_transform = default(mask_transform, lambda *args: args[0])

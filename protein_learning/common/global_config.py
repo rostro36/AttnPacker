@@ -1,307 +1,410 @@
 """Global Model configuration"""
 import os
 import sys
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-from typing import Optional, NamedTuple, List
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from typing import List, NamedTuple, Optional
 
 import numpy as np
 import torch
 
 from protein_learning.common.global_constants import (
-    START_TIME, CHECKPOINTS, LOGS, PARAMS, MODELS, STATS
+    CHECKPOINTS,
+    LOGS,
+    MODELS,
+    PARAMS,
+    START_TIME,
+    STATS,
 )
-from protein_learning.common.helpers import exists, default
-from protein_learning.common.io.utils import parse_arg_file, load_npy
+from protein_learning.common.helpers import default, exists
+from protein_learning.common.io.utils import load_npy, parse_arg_file
 
 
 def get_config(arg_list):
     """gets args to pass to ModelConfig"""
-    parser = ArgumentParser(description="Protein Learning Model",  # noqa
-                            epilog='trains Equivariant Transformer on model refinement task',
-                            formatter_class=ArgumentDefaultsHelpFormatter)
+    parser = ArgumentParser(
+        description="Protein Learning Model",  # noqa
+        epilog="trains Equivariant Transformer on model refinement task",
+        formatter_class=ArgumentDefaultsHelpFormatter,
+    )
 
-    parser.add_argument('--name',
-                        help='name to use for model output. output will be saved as '
-                             'os.path.join(out_root,<ty>,name_{date_time}.<suffix>)',
-                        type=str,
-                        default="model"
-                        )
+    parser.add_argument(
+        "--name",
+        help="name to use for model output. output will be saved as "
+        "os.path.join(out_root,<ty>,name_{date_time}.<suffix>)",
+        type=str,
+        default="model",
+    )
 
-    parser.add_argument('--out_root',
-                        help="root directory to store output in used for storing model statistics,"
-                             " saving the model,"
-                             " and checkpointing the model.",
-                        type=str,
-                        default='./output'
-                        )
+    parser.add_argument(
+        "--out_root",
+        help="root directory to store output in used for storing model statistics,"
+        " saving the model,"
+        " and checkpointing the model.",
+        type=str,
+        default="./output",
+    )
 
-    parser.add_argument('--train_decoy_folder',
-                        help='directory for loading decoys to train on',
-                        type=str,
-                        )
+    parser.add_argument(
+        "--train_decoy_folder",
+        help="directory for loading decoys to train on",
+        type=str,
+    )
 
-    parser.add_argument('--val_decoy_folder',
-                        help='directory for loading decoys to validate on',
-                        type=str,
-                        )
+    parser.add_argument(
+        "--val_decoy_folder",
+        help="directory for loading decoys to validate on",
+        type=str,
+    )
 
-    parser.add_argument('--test_decoy_folder',
-                        help='directory for loading decoys to test on',
-                        type=str,
-                        )
+    parser.add_argument(
+        "--test_decoy_folder",
+        help="directory for loading decoys to test on",
+        type=str,
+    )
 
-    parser.add_argument('--train_list',
-                        help='list of samples to train on. Must be formatted as : [dataset] [target] [model_pdb] '
-                             'where \ndataset: is the folder containing the target models \ntarget: is the name'
-                             ' of the target, and directory containing pdb files\n model_pdb: is the pdb for '
-                             'the model.\n All paths are taken relative to the data_root argument',
-                        type=str, default=None)
+    parser.add_argument(
+        "--train_list",
+        help="list of samples to train on. Must be formatted as : [dataset] [target] [model_pdb] "
+        "where \ndataset: is the folder containing the target models \ntarget: is the name"
+        " of the target, and directory containing pdb files\n model_pdb: is the pdb for "
+        "the model.\n All paths are taken relative to the data_root argument",
+        type=str,
+        default=None,
+    )
 
-    parser.add_argument('--val_list',
-                        help='list of samples to validate on on. (see --train_list)',
-                        type=str, default=None)
+    parser.add_argument(
+        "--val_list",
+        help="list of samples to validate on on. (see --train_list)",
+        type=str,
+        default=None,
+    )
 
-    parser.add_argument('--test_list',
-                        help='list of samples to validate on on. (see --train_list)',
-                        type=str, default=None)
+    parser.add_argument(
+        "--test_list",
+        help="list of samples to validate on on. (see --train_list)",
+        type=str,
+        default=None,
+    )
 
-    parser.add_argument('--train_native_folder',
-                        help='full path to folder storing native pdbs for --train_list samples',
-                        type=str, default=None)
+    parser.add_argument(
+        "--train_native_folder",
+        help="full path to folder storing native pdbs for --train_list samples",
+        type=str,
+        default=None,
+    )
 
-    parser.add_argument('--val_native_folder',
-                        help='full path to folder storing native pdbs for --val_list samples',
-                        type=str, default=None)
+    parser.add_argument(
+        "--val_native_folder",
+        help="full path to folder storing native pdbs for --val_list samples",
+        type=str,
+        default=None,
+    )
 
-    parser.add_argument('--test_native_folder',
-                        help='full path to folder storing native pdbs for --test_list samples',
-                        type=str, default=None)
+    parser.add_argument(
+        "--test_native_folder",
+        help="full path to folder storing native pdbs for --test_list samples",
+        type=str,
+        default=None,
+    )
 
-    parser.add_argument('--train_seq_folder',
-                        help='full path to folder storing native sequences for --train_list samples',
-                        type=str, default=None)
+    parser.add_argument(
+        "--train_seq_folder",
+        help="full path to folder storing native sequences for --train_list samples",
+        type=str,
+        default=None,
+    )
 
-    parser.add_argument('--val_seq_folder',
-                        help='full path to folder storing native sequences for --val_list samples',
-                        type=str, default=None)
+    parser.add_argument(
+        "--val_seq_folder",
+        help="full path to folder storing native sequences for --val_list samples",
+        type=str,
+        default=None,
+    )
 
-    parser.add_argument('--test_seq_folder',
-                        help='full path to folder storing native sequences for --test_list samples',
-                        type=str, default=None)
+    parser.add_argument(
+        "--test_seq_folder",
+        help="full path to folder storing native sequences for --test_list samples",
+        type=str,
+        default=None,
+    )
 
-    parser.add_argument('--load_state',
-                        help='load from previous state', action='store_true', dest='load_state')
+    parser.add_argument(
+        "--load_state",
+        help="load from previous state",
+        action="store_true",
+        dest="load_state",
+    )
 
     parser.set_defaults(raise_exceptions=False)
-    parser.add_argument('--raise_exceptions',
-                        help='whether to raise exceptions', action='store_true', dest='raise_exceptions')
+    parser.add_argument(
+        "--raise_exceptions",
+        help="whether to raise exceptions",
+        action="store_true",
+        dest="raise_exceptions",
+    )
 
-    parser.add_argument('--config_path',
-                        help='path to load config from if --load_state specified',
-                        type=str,
-                        default=None)
+    parser.add_argument(
+        "--config_path",
+        help="path to load config from if --load_state specified",
+        type=str,
+        default=None,
+    )
 
-    parser.add_argument('--checkpoint_idx',
-                        help=' (optional) index of model checkpoint to load\n'
-                             'loads most recent model state if value is negative',
-                        default=-1, type=int)
+    parser.add_argument(
+        "--checkpoint_idx",
+        help=" (optional) index of model checkpoint to load\n"
+        "loads most recent model state if value is negative",
+        default=-1,
+        type=int,
+    )
 
     # Run Options #
 
-    run_settings = parser.add_argument_group('Run Settings')
+    run_settings = parser.add_argument_group("Run Settings")
 
-    run_settings.add_argument('--data_workers',
-                              help="number of workers to use in loading data",
-                              type=int,
-                              default=4)
+    run_settings.add_argument(
+        "--data_workers",
+        help="number of workers to use in loading data",
+        type=int,
+        default=4,
+    )
 
     run_settings.set_defaults(shuffle=True)
-    run_settings.add_argument('--no_shuffle',
-                              help="whether or not to shuffle the train/validation data",
-                              action='store_false',
-                              dest='shuffle'
-                              )
+    run_settings.add_argument(
+        "--no_shuffle",
+        help="whether or not to shuffle the train/validation data",
+        action="store_false",
+        dest="shuffle",
+    )
 
-    run_settings.add_argument('-g', '--gpu_indices',
-                              help="gpu index to run on",
-                              type=str,
-                              nargs='+',
-                              default=["0"]
-                              )
+    run_settings.add_argument(
+        "-g",
+        "--gpu_indices",
+        help="gpu index to run on",
+        type=str,
+        nargs="+",
+        default=["0"],
+    )
 
-    run_settings.add_argument('--checkpoint_every',
-                              help="frequency (num batches) at which a hard copy of model is saved\n"
-                                   "use negative value to disable checkpointing model",
-                              type=int,
-                              default=1000)
+    run_settings.add_argument(
+        "--checkpoint_every",
+        help="frequency (num batches) at which a hard copy of model is saved\n"
+        "use negative value to disable checkpointing model",
+        type=int,
+        default=1000,
+    )
 
-    run_settings.add_argument('--save_every',
-                              help="frequency (num batches) at which model state is saved",
-                              type=int,
-                              default=50)
+    run_settings.add_argument(
+        "--save_every",
+        help="frequency (num batches) at which model state is saved",
+        type=int,
+        default=50,
+    )
 
-    run_settings.add_argument('--validate_every',
-                              help="frequency (num batches) at which to run model on validation set",
-                              type=int,
-                              default=250)
+    run_settings.add_argument(
+        "--validate_every",
+        help="frequency (num batches) at which to run model on validation set",
+        type=int,
+        default=250,
+    )
 
-    run_settings.add_argument('--test_every',
-                              help="frequency (num batches) at which to run model on test set",
-                              type=int,
-                              default=250)
+    run_settings.add_argument(
+        "--test_every",
+        help="frequency (num batches) at which to run model on test set",
+        type=int,
+        default=250,
+    )
 
-    run_settings.add_argument('--max_val_samples',
-                              help="maximum number of samples to validate on",
-                              type=int, default=300)
+    run_settings.add_argument(
+        "--max_val_samples",
+        help="maximum number of samples to validate on",
+        type=int,
+        default=300,
+    )
 
-    run_settings.add_argument('--max_test_samples',
-                              help="maximum number of samples to validate on",
-                              type=int, default=300)
+    run_settings.add_argument(
+        "--max_test_samples",
+        help="maximum number of samples to validate on",
+        type=int,
+        default=300,
+    )
 
-    run_settings.add_argument('--max_len',
-                              help='maximum (sequence) length to run through the model'
-                                   'proteins with more residues than this value will have their'
-                                   'sequence and coordinates randomly cropped.',
-                              default=300,
-                              type=int)
+    run_settings.add_argument(
+        "--max_len",
+        help="maximum (sequence) length to run through the model"
+        "proteins with more residues than this value will have their"
+        "sequence and coordinates randomly cropped.",
+        default=300,
+        type=int,
+    )
 
     # Training Settings #
 
     training_settings = parser.add_argument_group("Training Settings")
-    training_settings.add_argument('-b', '--batch_size',
-                                   help="batch size", type=int, default=32)
+    training_settings.add_argument(
+        "-b", "--batch_size", help="batch size", type=int, default=32
+    )
 
-    training_settings.add_argument('-e', '--epochs',
-                                   help="max number of epochs to run for",
-                                   type=int, default=10)
+    training_settings.add_argument(
+        "-e", "--epochs", help="max number of epochs to run for", type=int, default=10
+    )
 
-    training_settings.add_argument('--decrease_lr_by',
-                                   help="decrease learning rate by this factor every --decrease_lr_every epochs",
-                                   default=1, type=float)
+    training_settings.add_argument(
+        "--decrease_lr_by",
+        help="decrease learning rate by this factor every --decrease_lr_every epochs",
+        default=1,
+        type=float,
+    )
 
-    training_settings.add_argument('--decrease_lr_every',
-                                   help="decrease learning rate by --decrease_lr_by every --decrease_lr_every\n"
-                                        "many epochs. If this parameter is not positive, no update will be performed.",
-                                   default=0, type=int)
+    training_settings.add_argument(
+        "--decrease_lr_every",
+        help="decrease learning rate by --decrease_lr_by every --decrease_lr_every\n"
+        "many epochs. If this parameter is not positive, no update will be performed.",
+        default=0,
+        type=int,
+    )
 
-    training_settings.add_argument('--lr',
-                                   help="learning rate to use during training",
-                                   type=float,
-                                   default=1e-4)
+    training_settings.add_argument(
+        "--lr", help="learning rate to use during training", type=float, default=1e-4
+    )
 
-    training_settings.add_argument('--weight_decay',
-                                   help="weight decay parameter for l2 regularization",
-                                   type=float,
-                                   default=0)
+    training_settings.add_argument(
+        "--weight_decay",
+        help="weight decay parameter for l2 regularization",
+        type=float,
+        default=0,
+    )
 
-    training_settings.add_argument('--perturb_wts',
-                                   help="perturb model weights using this value as variance",
-                                   type=float,
-                                   default=0)
+    training_settings.add_argument(
+        "--perturb_wts",
+        help="perturb model weights using this value as variance",
+        type=float,
+        default=0,
+    )
 
-    training_settings.add_argument('--grad_norm_clip',
-                                   type=float,
-                                   default=3,
-                                   help="scale gradients so that cumulative norm is at most this value")
+    training_settings.add_argument(
+        "--grad_norm_clip",
+        type=float,
+        default=3,
+        help="scale gradients so that cumulative norm is at most this value",
+    )
     training_settings.set_defaults(average_batch=True)
-    training_settings.add_argument('--no_average_batch',
-                                   action="store_false",
-                                   dest="average_batch",
-                                   )
+    training_settings.add_argument(
+        "--no_average_batch",
+        action="store_false",
+        dest="average_batch",
+    )
 
-    training_settings.add_argument('--example_clip',
-                                   type=float,
-                                   default=1.0,
-                                   )
+    training_settings.add_argument(
+        "--example_clip",
+        type=float,
+        default=1.0,
+    )
 
     training_settings.set_defaults(clip_grad_per_sample=True)
-    training_settings.add_argument('--no_clip_grad_per_sample',
-                                   action='store_false',
-                                   help="clip gradients in each sample (rather than entire batch)",
-                                   dest="clip_grad_per_sample"
-                                   )
+    training_settings.add_argument(
+        "--no_clip_grad_per_sample",
+        action="store_false",
+        help="clip gradients in each sample (rather than entire batch)",
+        dest="clip_grad_per_sample",
+    )
 
     training_settings.set_defaults(use_re_zero=True)
-    training_settings.add_argument('--no_use_re_zero',
-                                   action='store_false',
-                                   dest='use_re_zero',
-                                   help="do not use reZero residual scheme")
+    training_settings.add_argument(
+        "--no_use_re_zero",
+        action="store_false",
+        dest="use_re_zero",
+        help="do not use reZero residual scheme",
+    )
 
-    training_settings.add_argument('--rmsd_cutoff',
-                                   help="cutoff (in angstroms) for maximum allowed rmsd between model and native. "
-                                        "Training and validation samples with initial RMSD > cutoff will be ignored",
-                                   type=int,
-                                   default=10)
+    training_settings.add_argument(
+        "--rmsd_cutoff",
+        help="cutoff (in angstroms) for maximum allowed rmsd between model and native. "
+        "Training and validation samples with initial RMSD > cutoff will be ignored",
+        type=int,
+        default=10,
+    )
 
-    training_settings.add_argument('--tm_cutoff',
-                                   help="cutoff (in angstroms) for minimum allowed tm between model and native. "
-                                        "Training and validation samples with initial tm < cutoff will be ignored",
-                                   type=float,
-                                   default=0.0)
+    training_settings.add_argument(
+        "--tm_cutoff",
+        help="cutoff (in angstroms) for minimum allowed tm between model and native. "
+        "Training and validation samples with initial tm < cutoff will be ignored",
+        type=float,
+        default=0.0,
+    )
 
     # Loss Settings #
 
     loss_settings = parser.add_argument_group("Loss Settings")
     # coordinate loss types
-    loss_settings.add_argument('--coord_loss_tys',
-                               nargs='+',
-                               type=str,
-                               default=[],
-                               help=f"list of coordinate loss types."
-                               )
+    loss_settings.add_argument(
+        "--coord_loss_tys",
+        nargs="+",
+        type=str,
+        default=[],
+        help=f"list of coordinate loss types.",
+    )
 
-    loss_settings.add_argument('--coord_loss_weights',
-                               nargs='+',
-                               type=float,
-                               default=[],
-                               help="weight of each coordinate loss type"
-                               )
+    loss_settings.add_argument(
+        "--coord_loss_weights",
+        nargs="+",
+        type=float,
+        default=[],
+        help="weight of each coordinate loss type",
+    )
 
-    loss_settings.add_argument('--atom_loss_tys',
-                               nargs='+',
-                               type=str,
-                               default=[],
-                               help=f"list of atom loss types"
-                               )
+    loss_settings.add_argument(
+        "--atom_loss_tys",
+        nargs="+",
+        type=str,
+        default=[],
+        help=f"list of atom loss types",
+    )
 
-    loss_settings.add_argument('--atom_loss_weights',
-                               nargs='+',
-                               type=float,
-                               default=[],
-                               help="weight of each atom loss type"
-                               )
+    loss_settings.add_argument(
+        "--atom_loss_weights",
+        nargs="+",
+        type=float,
+        default=[],
+        help="weight of each atom loss type",
+    )
 
-    loss_settings.add_argument('--pair_loss_tys',
-                               nargs='+',
-                               type=str,
-                               default=[],
-                               help=f"list of pair loss types."
-                               )
+    loss_settings.add_argument(
+        "--pair_loss_tys",
+        nargs="+",
+        type=str,
+        default=[],
+        help=f"list of pair loss types.",
+    )
 
-    loss_settings.add_argument('--pair_loss_weights',
-                               nargs='+',
-                               type=float,
-                               default=[],
-                               help="weight of each pair loss type"
-                               )
+    loss_settings.add_argument(
+        "--pair_loss_weights",
+        nargs="+",
+        type=float,
+        default=[],
+        help="weight of each pair loss type",
+    )
 
     model_settings = parser.add_argument_group("Model Settings")
 
-    model_settings.add_argument("--se3_configs",
-                                nargs="+",
-                                help="path to file conttaining se3 attention config(s)",
-                                default=[],
-                                )
-    model_settings.add_argument("--evoformer_configs",
-                                nargs="+",
-                                help="path to file conttaining evoformer config(s)",
-                                default=[],
-                                )
-    model_settings.add_argument("--ipa_configs",
-                                nargs="+",
-                                help="path to file conttaining evoformer config(s)",
-                                default=[],
-                                )
+    model_settings.add_argument(
+        "--se3_configs",
+        nargs="+",
+        help="path to file conttaining se3 attention config(s)",
+        default=[],
+    )
+    model_settings.add_argument(
+        "--evoformer_configs",
+        nargs="+",
+        help="path to file conttaining evoformer config(s)",
+        default=[],
+    )
+    model_settings.add_argument(
+        "--ipa_configs",
+        nargs="+",
+        help="path to file conttaining evoformer config(s)",
+        default=[],
+    )
 
     # new options
     parser.set_defaults(save_pdbs=False)
@@ -316,6 +419,7 @@ def get_config(arg_list):
 
 class GlobalConfig(NamedTuple):
     """Global model configuration parameters"""
+
     name: str
     out_root: str
     checkpoint_idx: int
@@ -480,8 +584,11 @@ def print_config(config: GlobalConfig):
         print(f"{k} : {v}")
 
 
-def load_config(curr_config: Optional[GlobalConfig] = None, config_path: Optional[str] = None,
-                **override) -> GlobalConfig:
+def load_config(
+    curr_config: Optional[GlobalConfig] = None,
+    config_path: Optional[str] = None,
+    **override,
+) -> GlobalConfig:
     """Load a ModelConfig
     :param curr_config: a ModelConfig
     :param config_path: path to config file
@@ -493,8 +600,8 @@ def load_config(curr_config: Optional[GlobalConfig] = None, config_path: Optiona
     else:
         assert exists(config_path)
     load_kwargs = load_npy(config_path)
-    load_kwargs['load_state'] = True
-    load_kwargs['config_path'] = config_path
+    load_kwargs["load_state"] = True
+    load_kwargs["config_path"] = config_path
     load_kwargs.update(override)
     return GlobalConfig(**load_kwargs)
 

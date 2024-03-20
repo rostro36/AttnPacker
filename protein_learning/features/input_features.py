@@ -18,11 +18,7 @@ class InputFeatures:
     """Dictionary-like wrapper for ProteinModel input features"""
 
     def __init__(
-            self,
-            features: Dict[str, Feature],
-            batch_size: int,
-            length: int,
-            **extra
+        self, features: Dict[str, Feature], batch_size: int, length: int, **extra
     ):
         """
         :param features: Dict of input features

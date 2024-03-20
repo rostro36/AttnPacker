@@ -30,4 +30,7 @@ def get_interface_segment(interface_order: Tensor, max_res: int) -> Tuple[int, i
     n_res = interface_order.numel()
     max_res = min(max_res, n_res)
     nearest_res = interface_order[0]
-    return (nearest_res - max_res // 2, nearest_res + max_res // 2 - ((max_res + 1) % 2))
+    return (
+        nearest_res - max_res // 2,
+        nearest_res + max_res // 2 - ((max_res + 1) % 2),
+    )

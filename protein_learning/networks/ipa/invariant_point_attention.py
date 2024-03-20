@@ -1,16 +1,18 @@
 """Invariant Point Attention"""
+from typing import List, Optional
+
 import torch
 import torch.nn.functional as F
-from torch import nn, einsum, Tensor
-
-from einops.layers.torch import Rearrange
 from einops import rearrange, repeat  # noqa
-from protein_learning.common.helpers import exists, default, get_min_val as max_neg_value, disable_tf32
-from protein_learning.networks.common.net_utils import SplitLinear, Residual
-from protein_learning.networks.ipa.ipa_config import IPAConfig
+from einops.layers.torch import Rearrange
+from torch import Tensor, einsum, nn
+
+from protein_learning.common.helpers import default, disable_tf32, exists
+from protein_learning.common.helpers import get_min_val as max_neg_value
 from protein_learning.common.rigids import Rigids
+from protein_learning.networks.common.net_utils import Residual, SplitLinear
+from protein_learning.networks.ipa.ipa_config import IPAConfig
 from protein_learning.networks.loss.coord_loss import FAPELoss
-from typing import Optional, List
 
 
 class InvariantPointAttention(nn.Module):
@@ -42,7 +44,9 @@ class InvariantPointAttention(nn.Module):
         # SplitLinear with 6 splits is approximately twice as fast as using 6 separate
         # linear projections to produce q,k,v for scalars and points
         scalar_qkv_sizes = [scalar_key_dim * heads] * 2 + [scalar_value_dim * heads]
-        point_qkv_sizes = [point_key_dim * heads * 3] * 2 + [point_value_dim * heads * 3]
+        point_qkv_sizes = [point_key_dim * heads * 3] * 2 + [
+            point_value_dim * heads * 3
+        ]
         split_sizes = scalar_qkv_sizes + point_qkv_sizes
         self.to_qkv = SplitLinear(dim, sum(split_sizes), bias=False, sizes=split_sizes)
 
@@ -51,10 +55,14 @@ class InvariantPointAttention(nn.Module):
         point_weight_init_value = torch.log(torch.exp(torch.full((heads,), 1.0)) - 1.0)
         self.point_weights = nn.Parameter(point_weight_init_value)
 
-        self.point_attn_logits_scale = ((num_attn_logits * point_key_dim) * (9 / 2)) ** -0.5
+        self.point_attn_logits_scale = (
+            (num_attn_logits * point_key_dim) * (9 / 2)
+        ) ** -0.5
 
         # pairwise representation projection to attention bias
-        pairwise_repr_dim = default(pairwise_repr_dim, dim) if require_pairwise_repr else 0
+        pairwise_repr_dim = (
+            default(pairwise_repr_dim, dim) if require_pairwise_repr else 0
+        )
         if require_pairwise_repr:
             self.pairwise_attn_logits_scale = num_attn_logits**-0.5
             self.to_pairwise_attn_bias = nn.Sequential(
@@ -62,9 +70,14 @@ class InvariantPointAttention(nn.Module):
             )
 
         # combine out - scalar dim + pairwise dim + point dim * (3 for coordinates in R3 and then 1 for norm)
-        self.to_out = nn.Linear(heads * (scalar_value_dim + pairwise_repr_dim + point_value_dim * (3 + 1)), dim)
+        self.to_out = nn.Linear(
+            heads * (scalar_value_dim + pairwise_repr_dim + point_value_dim * (3 + 1)),
+            dim,
+        )
 
-    def forward(self, single_repr: Tensor, rigids: Rigids, pairwise_repr=None, mask=None):
+    def forward(
+        self, single_repr: Tensor, rigids: Rigids, pairwise_repr=None, mask=None
+    ):
         x, b, h, eps, require_pairwise_repr = (
             single_repr,
             single_repr.shape[0],
@@ -80,31 +93,45 @@ class InvariantPointAttention(nn.Module):
         q_scalar, k_scalar, v_scalar, q_point, k_point, v_point = self.to_qkv(x)
         # split out heads
         q_scalar, k_scalar, v_scalar = map(
-            lambda t: rearrange(t, "b n (h d) -> (b h) n d", h=h), (q_scalar, k_scalar, v_scalar)
+            lambda t: rearrange(t, "b n (h d) -> (b h) n d", h=h),
+            (q_scalar, k_scalar, v_scalar),
         )
         q_point, k_point, v_point = map(
-            lambda t: rearrange(t, "b n (h d c) -> (b h) n d c", h=h, c=3), (q_point, k_point, v_point)
+            lambda t: rearrange(t, "b n (h d c) -> (b h) n d c", h=h, c=3),
+            (q_point, k_point, v_point),
         )
 
         # rotate qkv points into global frame
-        q_point, k_point, v_point = map(lambda ps: rigids.apply(ps), (q_point, k_point, v_point))
+        q_point, k_point, v_point = map(
+            lambda ps: rigids.apply(ps), (q_point, k_point, v_point)
+        )
 
         # derive attn logits for scalar and pairwise
 
-        attn_logits_scalar = einsum("b i d, b j d -> b i j", q_scalar, k_scalar) * self.scalar_attn_logits_scale
+        attn_logits_scalar = (
+            einsum("b i d, b j d -> b i j", q_scalar, k_scalar)
+            * self.scalar_attn_logits_scale
+        )
 
         if require_pairwise_repr:
-            attn_logits_pairwise = self.to_pairwise_attn_bias(pairwise_repr) * self.pairwise_attn_logits_scale
+            attn_logits_pairwise = (
+                self.to_pairwise_attn_bias(pairwise_repr)
+                * self.pairwise_attn_logits_scale
+            )
 
         # derive attn logits for point attention
 
-        point_qk_diff = rearrange(q_point, "b i d c -> b i () d c") - rearrange(k_point, "b j d c -> b () j d c")
+        point_qk_diff = rearrange(q_point, "b i d c -> b i () d c") - rearrange(
+            k_point, "b j d c -> b () j d c"
+        )
         point_dist = (point_qk_diff**2).sum(dim=(-1, -2))
 
         point_weights = F.softplus(self.point_weights)
         point_weights = repeat(point_weights, "h -> (b h) () ()", b=b)
 
-        attn_logits_points = -0.5 * (point_dist * point_weights * self.point_attn_logits_scale)
+        attn_logits_points = -0.5 * (
+            point_dist * point_weights * self.point_attn_logits_scale
+        )
 
         # combine attn logits
 
@@ -131,22 +158,35 @@ class InvariantPointAttention(nn.Module):
             attn_with_heads = rearrange(attn, "(b h) i j -> b h i j", h=h)
             results_pairwise = None
             if require_pairwise_repr:
-                results_pairwise = einsum("b h i j, b i j d -> b h i d", attn_with_heads, pairwise_repr)
-                results_pairwise = rearrange(results_pairwise, "b h n d -> b n (h d)", h=h)
+                results_pairwise = einsum(
+                    "b h i j, b i j d -> b h i d", attn_with_heads, pairwise_repr
+                )
+                results_pairwise = rearrange(
+                    results_pairwise, "b h n d -> b n (h d)", h=h
+                )
 
             # aggregate point values
             results_points = einsum("b i j, b j d c -> b i d c", attn, v_point)
 
             # rotate aggregated point values back into local frame
             results_points = rigids.apply_inverse(results_points)
-            results_points_norm = torch.sqrt(torch.square(results_points).sum(dim=-1) + eps)
+            results_points_norm = torch.sqrt(
+                torch.square(results_points).sum(dim=-1) + eps
+            )
 
         # merge back heads
         results_scalar = rearrange(results_scalar, "(b h) n d -> b n (h d)", h=h)
         results_points = rearrange(results_points, "(b h) n d c -> b n (h d c)", h=h)
-        results_points_norm = rearrange(results_points_norm, "(b h) n d -> b n (h d)", h=h)
+        results_points_norm = rearrange(
+            results_points_norm, "(b h) n d -> b n (h d)", h=h
+        )
 
-        results = (results_scalar, results_points, results_points_norm, results_pairwise)
+        results = (
+            results_scalar,
+            results_points,
+            results_points_norm,
+            results_pairwise,
+        )
 
         # concat results and project out
         results = torch.cat([x for x in results if x is not None], dim=-1)
@@ -225,7 +265,9 @@ class IPATransformer(nn.Module):
         # output points
         self.to_points = None
         if config.compute_coords:
-            self.to_points = nn.Linear(scalar_dim, 3 * config.dim_out(coord=True), bias=False)
+            self.to_points = nn.Linear(
+                scalar_dim, 3 * config.dim_out(coord=True), bias=False
+            )
             nn.init.uniform_(self.to_points.weight, a=0, b=1e-4)
 
     def forward(
@@ -245,13 +287,20 @@ class IPATransformer(nn.Module):
         if not exists(rigids):
             rigids = Rigids.IdentityRigid(leading_shape=x.shape[:2], device=x.device)
         # go through the layers and apply invariant point attention and feedforward
-        get_layer = lambda i: self.layers[i] if not config.share_weights else self.layers[0]
+        get_layer = (
+            lambda i: self.layers[i] if not config.share_weights else self.layers[0]
+        )
         loss = 0
-        normed_pair_feats = self.pair_pre_norm(pair_feats) if exists(pair_feats) else None
+        normed_pair_feats = (
+            self.pair_pre_norm(pair_feats) if exists(pair_feats) else None
+        )
         for idx in range(config.depth):
             block, norm, to_update = get_layer(idx)
             block_out = block(
-                x, pairwise_repr=normed_pair_feats, rigids=rigids.detach_rot() if detach_rot else rigids, mask=mask
+                x,
+                pairwise_repr=normed_pair_feats,
+                rigids=rigids.detach_rot() if detach_rot else rigids,
+                mask=mask,
             )
             # update quaternion and translation
             x = self.residuals[idx](block_out, res=x)
@@ -263,14 +312,23 @@ class IPATransformer(nn.Module):
             if config.share_weights:
                 loss = (
                     loss
-                    + self.auxilliary_loss(rigids, true_rigids, scale_factor=scale_factor, mask=mask) / config.depth
+                    + self.auxilliary_loss(
+                        rigids, true_rigids, scale_factor=scale_factor, mask=mask
+                    )
+                    / config.depth
                 )
 
         rigids = rigids.scale(scale_factor)
-        out = (x, pair_feats, rigids, loss) if config.share_weights else (x, pair_feats, rigids)
+        out = (
+            (x, pair_feats, rigids, loss)
+            if config.share_weights
+            else (x, pair_feats, rigids)
+        )
         if not exists(self.to_points):
             return out
-        points_local = rearrange(self.to_points(normed_x) * scale_factor, "b n (a c) -> b n a c", c=3)
+        points_local = rearrange(
+            self.to_points(normed_x) * scale_factor, "b n (a c) -> b n a c", c=3
+        )
         return *out, rigids.apply(points_local)
 
     @staticmethod

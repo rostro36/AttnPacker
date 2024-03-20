@@ -1,9 +1,12 @@
+import gzip
 import os
+import pickle
 from contextlib import contextmanager
 from itertools import product
 
 import torch
 from einops import rearrange
+from filelock import FileLock
 from torch import einsum
 
 from protein_learning.networks.common.helpers.torch_utils import torch_default_dtype
@@ -11,11 +14,9 @@ from protein_learning.networks.common.utils import exists
 from protein_learning.networks.tfn.repr.cache_utils import cache_dir
 from protein_learning.networks.tfn.repr.fiber import to_order
 from protein_learning.networks.tfn.repr.irr_repr import irr_repr, spherical_harmonics
-from protein_learning.networks.tfn.repr.spherical_harmonics import clear_spherical_harmonics_cache
-from filelock import FileLock
-import pickle
-import gzip
-
+from protein_learning.networks.tfn.repr.spherical_harmonics import (
+    clear_spherical_harmonics_cache,
+)
 
 # M.M I have no idea what kind of psychopath would cache to a hidden directory in ~/
 # Just realized this was happening as the AttnPacker code was being prepared.
@@ -23,7 +24,11 @@ import gzip
 # So you will *NOT* be able to run the same model on different machines
 # Without copying over the weights in this cache... Imagine my frustration when
 # Trying to figure this out.
-CACHE_PATH = os.path.expanduser("~/.cache.equivariant_attention") if not exists(os.environ.get("CLEAR_CACHE")) else None
+CACHE_PATH = (
+    os.path.expanduser("~/.cache.equivariant_attention")
+    if not exists(os.environ.get("CLEAR_CACHE"))
+    else None
+)
 
 # todo (figure ot why this was hard coded in official repo)
 
@@ -95,10 +100,14 @@ def get_spherical_from_cartesian(cartesian, divide_radius_by=1.0):
 
     # get second angle
     # version 'elevation angle defined from Z-axis down'
-    spherical[..., ind_beta] = torch.atan2(torch.sqrt(r_xy), cartesian[..., cartesian_z])
+    spherical[..., ind_beta] = torch.atan2(
+        torch.sqrt(r_xy), cartesian[..., cartesian_z]
+    )
 
     # get angle in x-y plane
-    spherical[..., ind_alpha] = torch.atan2(cartesian[..., cartesian_y], cartesian[..., cartesian_x])
+    spherical[..., ind_alpha] = torch.atan2(
+        cartesian[..., cartesian_y], cartesian[..., cartesian_x]
+    )
 
     # get overall radius
     radius = torch.sqrt(r_xy + cartesian[..., cartesian_z] ** 2)
@@ -130,7 +139,9 @@ def get_R_tensor(order_out, order_in, a, b, c):
 
 def sylvester_submatrix(order_out, order_in, J, a, b, c):
     """generate Kronecker product matrix for solving the Sylvester equation in subspace J"""
-    R_tensor = get_R_tensor(order_out, order_in, a, b, c)  # [m_out * m_in, m_out * m_in]
+    R_tensor = get_R_tensor(
+        order_out, order_in, a, b, c
+    )  # [m_out * m_in, m_out * m_in]
     R_irrep_J = irr_repr(J, a, b, c)  # [m, m]
 
     R_tensor_identity = torch.eye(R_tensor.shape[0])
@@ -151,12 +162,17 @@ def basis_transformation_Q_J(J, order_in, order_out, random_angles=RANDOM_ANGLES
     :param order_out: order of the output representation
     :return: one part of the Q^-1 matrix of the article
     """
-    sylvester_submatrices = [sylvester_submatrix(order_out, order_in, J, a, b, c) for a, b, c in random_angles]
+    sylvester_submatrices = [
+        sylvester_submatrix(order_out, order_in, J, a, b, c)
+        for a, b, c in random_angles
+    ]
     null_space = get_matrices_kernel(sylvester_submatrices)
     # unique subspace solution
     assert null_space.size(0) == 1, null_space.size()
     Q_J = null_space[0]  # [(m_out * m_in) * m]
-    Q_J = Q_J.view(to_order(order_out) * to_order(order_in), to_order(J))  # [m_out * m_in, m]
+    Q_J = Q_J.view(
+        to_order(order_out) * to_order(order_in), to_order(J)
+    )  # [m_out * m_in, m]
     return Q_J.float()  # [m_out * m_in, m]
 
 
@@ -192,7 +208,10 @@ def precompute_sh(r_ij, max_J):
     :return: dict where each entry has shape [B,N,K,2J+1]
     """
     i_alpha, i_beta = 1, 2
-    Y_Js = {J: spherical_harmonics(J, r_ij[..., i_alpha], r_ij[..., i_beta]) for J in range(max_J + 1)}
+    Y_Js = {
+        J: spherical_harmonics(J, r_ij[..., i_alpha], r_ij[..., i_beta])
+        for J in range(max_J + 1)
+    }
     clear_spherical_harmonics_cache()
     return Y_Js
 
@@ -244,7 +263,14 @@ def get_basis(r_ij, max_degree, differentiable=False, dirname=None):
 
             # Reshape so can take linear combinations with a dot product
             K_Js = torch.stack(K_Js, dim=-1)
-            size = (*r_ij.shape[:-1], 1, to_order(d_out), 1, to_order(d_in), to_order(min(d_in, d_out)))
+            size = (
+                *r_ij.shape[:-1],
+                1,
+                to_order(d_out),
+                1,
+                to_order(d_in),
+                to_order(min(d_in, d_out)),
+            )
             basis[f"{d_in},{d_out}"] = K_Js.view(*size)
 
     # extra detach for safe measure

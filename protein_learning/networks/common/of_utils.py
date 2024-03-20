@@ -1,12 +1,13 @@
 """Networks and utility functions apadted from:
 https://github.com/aqlaboratory/openfold/blob/main/openfold/model/primitives.py
 """
-import torch
-from torch import nn
 import math
+from typing import Callable, Optional, Tuple
+
 import numpy as np
+import torch
 from scipy.stats import truncnorm
-from typing import Optional, Callable, Tuple
+from torch import nn
 
 
 def _prod(nums):

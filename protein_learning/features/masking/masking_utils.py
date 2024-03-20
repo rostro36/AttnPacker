@@ -2,14 +2,14 @@
 from __future__ import annotations
 
 import random
-from typing import Optional, Tuple, Any, List, Callable, Dict
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
-from einops import repeat, rearrange  # noqa
+from einops import rearrange, repeat  # noqa
 from torch import Tensor
 
-from protein_learning.common.helpers import exists, default
+from protein_learning.common.helpers import default, exists
 from protein_learning.features.feature_config import FeatureName, FeatureTy
 from protein_learning.features.input_features import Feature
 
@@ -18,7 +18,7 @@ max_value = lambda x: torch.finfo(x.dtype).max  # noqa
 INTER_IGNORE_FEATS = {
     FeatureName.REL_CHAIN,
     FeatureName.EXTRA_PAIR,
-    FeatureName.EXTRA_RES
+    FeatureName.EXTRA_RES,
 }
 
 INTRA_IGNORE_FEAT_LIST = [
@@ -26,7 +26,7 @@ INTRA_IGNORE_FEAT_LIST = [
     FeatureName.REL_SEP,
     FeatureName.REL_POS,
     FeatureName.EXTRA_RES,
-    FeatureName.EXTRA_PAIR
+    FeatureName.EXTRA_PAIR,
 ]
 INTRA_IGNORE_FEATS = set(INTRA_IGNORE_FEAT_LIST)
 
@@ -75,9 +75,9 @@ def apply_mask_to_seq(seq: str, mask: Tensor):
 
 
 def get_mask_len(
-        n_res: int,
-        min_n_max_p: Tuple[float, float],
-        min_n_max_res: Optional[Tuple[int, int]] = None,
+    n_res: int,
+    min_n_max_p: Tuple[float, float],
+    min_n_max_res: Optional[Tuple[int, int]] = None,
 ) -> int:
     """gets number of residues to mask given
     (1) number of residues in sequence
@@ -117,13 +117,12 @@ def chain_mask_to_full_mask(n_res: int, mask: Tensor, indices: Tensor) -> Tensor
 
 
 def get_bipartite_mask(
-        mask: Tensor,
-        S_indices: Tensor,
-        T_indices: Optional[Tensor] = None,
-        fill: Any = True,
+    mask: Tensor,
+    S_indices: Tensor,
+    T_indices: Optional[Tensor] = None,
+    fill: Any = True,
 ) -> Tensor:
-    """Mask all (i,j) such that (i in S and j in T) or (j in S and i in T)
-    """
+    """Mask all (i,j) such that (i in S and j in T) or (j in S and i in T)"""
     T_indices = default(T_indices, S_indices)
     rep_T = repeat(T_indices, "i -> i m", m=S_indices.numel())
     rep_S = repeat(S_indices, "i -> i m", m=T_indices.numel())
@@ -133,7 +132,9 @@ def get_bipartite_mask(
 
 
 def get_partition_mask(
-        n_res: int, partition: List[Tensor], part_adjs: Optional[Tensor] = None,
+    n_res: int,
+    partition: List[Tensor],
+    part_adjs: Optional[Tensor] = None,
 ) -> Tensor:
     """Mask edges crossing between components of partition.
 
@@ -176,8 +177,9 @@ def sample_strategy(strats: List[Callable], wts: List[float]) -> Callable:
     return strats[strategy_idx]
 
 
-def get_chain_masks(n_res: int, chain_indices: List[Tensor]
-                    ) -> Tuple[List[Tensor], List[Tensor], Tensor]:
+def get_chain_masks(
+    n_res: int, chain_indices: List[Tensor]
+) -> Tuple[List[Tensor], List[Tensor], Tensor]:
     """Single and pairwise masks for each chain"""
     chain_masks, chain_pair_masks, device = [], [], chain_indices[0].device
     for indices in chain_indices:
@@ -185,7 +187,7 @@ def get_chain_masks(n_res: int, chain_indices: List[Tensor]
             chain_mask_to_full_mask(
                 n_res,
                 mask=torch.ones(len(indices), device=device).bool(),
-                indices=indices
+                indices=indices,
             )
         )
         chain_pair_masks.append(pair_feat_mask(chain_masks[-1]))
@@ -194,9 +196,7 @@ def get_chain_masks(n_res: int, chain_indices: List[Tensor]
 
 
 def mask_intra_chain_features(
-        feats: Dict[str, Feature],
-        feat_mask: Tensor,
-        mask_seq: bool = True
+    feats: Dict[str, Feature], feat_mask: Tensor, mask_seq: bool = True
 ) -> Dict[str, Feature]:
     """Mask intra-chain features"""
     assert exists(feat_mask)
@@ -219,16 +219,19 @@ def mask_intra_chain_features(
             feature.apply_mask(pair_mask)
 
         else:
-            raise Exception(f"Error masking {feature.name}, feature type "
-                            f": {feature.ty.value} not supported")
+            raise Exception(
+                f"Error masking {feature.name}, feature type "
+                f": {feature.ty.value} not supported"
+            )
 
     # print("intra chain mask ",feat_mask[feat_mask].numel()/feat_mask.numel())
     # print("intra chain pair mask ", pair_mask[pair_mask].numel()/pair_mask.numel())
     return feats
 
 
-def mask_inter_chain_pair_features(feats: Dict[str, Feature], pair_mask: Tensor
-                                   ) -> Dict[str, Feature]:
+def mask_inter_chain_pair_features(
+    feats: Dict[str, Feature], pair_mask: Tensor
+) -> Dict[str, Feature]:
     """Mask inter-chain pair features"""
     for feature_name, feature in feats.items():
         if feature.name in INTER_IGNORE_FEAT_NAMES or feature.ty == FeatureTy.RESIDUE:

@@ -1,44 +1,58 @@
-import torch
-from protein_learning.common.helpers import default, safe_norm
-from torch import nn, Tensor
-from typing import Optional, Tuple, Callable
-from protein_learning.networks.common.equivariant.norm import CoordNorm
-from protein_learning.networks.common.equivariant.linear import GVPLinear
-from math import sqrt
-from protein_learning.networks.common.helpers.torch_utils import fused_gelu as GELU  # noqa
 from functools import partial
+from math import sqrt
+from typing import Callable, Optional, Tuple
+
+import torch
+from torch import Tensor, nn
+
+from protein_learning.common.helpers import default, safe_norm
+from protein_learning.networks.common.equivariant.linear import GVPLinear
+from protein_learning.networks.common.equivariant.norm import CoordNorm
+from protein_learning.networks.common.helpers.torch_utils import (
+    fused_gelu as GELU,
+)  # noqa
 
 default_coord_norm = partial(CoordNorm, nonlin=GELU, use_layernorm=True)
 default_scalar_norm = lambda dim: nn.Sequential()
 
 
 class GVPFeedForwardBlock(nn.Module):
-    """ Unit from "LEARNING FROM PROTEIN STRUCTURE WITH
-        GEOMETRIC VECTOR PERCEPTRONS"
-        https://openreview.net/pdf?id=1YLJDvSx6J4 (see fig. 1, Algorithm 1.).
+    """Unit from "LEARNING FROM PROTEIN STRUCTURE WITH
+    GEOMETRIC VECTOR PERCEPTRONS"
+    https://openreview.net/pdf?id=1YLJDvSx6J4 (see fig. 1, Algorithm 1.).
     """
 
-    def __init__(self,
-                 dim_in: Tuple[int, int],
-                 dim_out: Optional[Tuple[int, int]] = None,
-                 nonlin: Tuple[Callable, Callable] = None,
-                 norm_scale: float = 0.1,
-                 norm_in: bool = True,
-                 use_scalar_bias: bool = True,
-                 ):
+    def __init__(
+        self,
+        dim_in: Tuple[int, int],
+        dim_out: Optional[Tuple[int, int]] = None,
+        nonlin: Tuple[Callable, Callable] = None,
+        norm_scale: float = 0.1,
+        norm_in: bool = True,
+        use_scalar_bias: bool = True,
+    ):
         super(GVPFeedForwardBlock, self).__init__()
         dim_out = default(dim_out, dim_in)
         dim_hidden = (max(dim_in[0], dim_out[0]), max(dim_in[1], dim_out[1]))
         self.proj_in = GVPLinear(
-            dim_in=dim_in, dim_out=dim_hidden,
-            norm_scale=norm_scale, use_scalar_bias=use_scalar_bias
+            dim_in=dim_in,
+            dim_out=dim_hidden,
+            norm_scale=norm_scale,
+            use_scalar_bias=use_scalar_bias,
         )
         self.nonlin = default(nonlin, (nn.ReLU, nn.ReLU))
         self.scalar_norm, self.coord_norm = nn.Identity(), nn.Identity()
         if norm_in:
             self.scalar_norm = nn.LayerNorm(dim_in[0])
-            self.coord_norm = lambda crds: sqrt(self.dim_in[1]) * crds / (
-                torch.sum(safe_norm(crds, dim=-1, keepdim=True), dim=-2, keepdim=True))
+            self.coord_norm = (
+                lambda crds: sqrt(self.dim_in[1])
+                * crds
+                / (
+                    torch.sum(
+                        safe_norm(crds, dim=-1, keepdim=True), dim=-2, keepdim=True
+                    )
+                )
+            )
 
     def forward(self, scalar_feats, coord_feats) -> Tuple[Tensor, Tensor]:
         squeeze = scalar_feats.ndim == 4
@@ -66,15 +80,15 @@ class FeedForward(nn.Module):
     """
 
     def __init__(
-            self,
-            dim_in,
-            dim_hidden=None,
-            dim_out=None,
-            mult: int = 4,
-            nonlin=None,
-            use_norm=True,
-            norm=None,
-            init_eps=None,
+        self,
+        dim_in,
+        dim_hidden=None,
+        dim_out=None,
+        mult: int = 4,
+        nonlin=None,
+        use_norm=True,
+        norm=None,
+        init_eps=None,
     ):
         """SE(k) equivariant feedforward vector neural network.
 
@@ -91,9 +105,13 @@ class FeedForward(nn.Module):
         super().__init__()
         dim_hidden = default(dim_hidden, dim_in * mult)
         dim_out = default(dim_out, dim_in)
-        self.project_in = nn.Parameter(torch.randn(dim_hidden, dim_in) * default(init_eps, 1 / sqrt(dim_in)))
+        self.project_in = nn.Parameter(
+            torch.randn(dim_hidden, dim_in) * default(init_eps, 1 / sqrt(dim_in))
+        )
         self.nonlin = default(nonlin, GELU)
-        self.project_out = nn.Parameter(torch.randn(dim_out, dim_hidden) * default(init_eps, 1 / sqrt(dim_hidden)))
+        self.project_out = nn.Parameter(
+            torch.randn(dim_out, dim_hidden) * default(init_eps, 1 / sqrt(dim_hidden))
+        )
         self.norm = default(norm, CoordNorm(dim_hidden)) if use_norm else nn.Identity()
 
     def forward(self, features):
@@ -117,15 +135,14 @@ class FeedForwardResidualBlock(nn.Module):
     """
 
     def __init__(
-            self,
-            dim_in,
-            dim_hidden=None,
-            mult: int = 4,
-            nonlin=None,
-            use_norm=True,
-            norm=None,
-            pre_norm=True,
-
+        self,
+        dim_in,
+        dim_hidden=None,
+        mult: int = 4,
+        nonlin=None,
+        use_norm=True,
+        norm=None,
+        pre_norm=True,
     ):
         """Vector Neuron Feedforward Block with residual connection.
 
@@ -142,13 +159,15 @@ class FeedForwardResidualBlock(nn.Module):
         """
         super().__init__()
         self.prenorm = CoordNorm(dim_in) if pre_norm else lambda x: x
-        self.feedforward = FeedForward(dim_in,
-                                       dim_hidden=dim_hidden,
-                                       dim_out=dim_in,
-                                       mult=mult,
-                                       nonlin=nonlin,
-                                       norm=norm,
-                                       use_norm=use_norm)
+        self.feedforward = FeedForward(
+            dim_in,
+            dim_hidden=dim_hidden,
+            dim_out=dim_in,
+            mult=mult,
+            nonlin=nonlin,
+            norm=norm,
+            use_norm=use_norm,
+        )
 
     def forward(self, features):
         res = features

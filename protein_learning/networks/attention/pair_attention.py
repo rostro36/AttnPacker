@@ -4,10 +4,17 @@ from typing import Optional
 import torch
 import torch.utils.checkpoint as checkpoint
 from einops import rearrange  # noqa
-from torch import nn, einsum, Tensor
+from torch import Tensor, einsum, nn
 
-from protein_learning.networks.common.net_utils import Residual, exists, default, LearnedOuter, Transition, get_min_val
 from protein_learning.networks.common.jit_scripts import Fuser
+from protein_learning.networks.common.net_utils import (
+    LearnedOuter,
+    Residual,
+    Transition,
+    default,
+    exists,
+    get_min_val,
+)
 
 List = nn.ModuleList  # noqa
 tri_outgoing = lambda a, b: torch.einsum("b i k d, b j k d -> b i j d ", a, b)
@@ -29,7 +36,9 @@ class TriangleMul(nn.Module):  # noqa
         self.pre_norm = nn.LayerNorm(dim_in)
         self.to_feats_n_gates = nn.Linear(dim_in, 4 * dim_hidden)
         self.gate_out_proj = nn.Linear(dim_in, dim_in)
-        self.to_out = nn.Sequential(nn.LayerNorm(dim_hidden), nn.Linear(dim_hidden, dim_in))
+        self.to_out = nn.Sequential(
+            nn.LayerNorm(dim_hidden), nn.Linear(dim_hidden, dim_in)
+        )
         self.func = tri_outgoing if not incoming else tri_incoming
         self.residual = default(residual, lambda x, res: x)
         self.checkpoint_outer = checkpoint_outer
@@ -44,11 +53,17 @@ class TriangleMul(nn.Module):  # noqa
         if exists(mask):
             mask = ~mask.unsqueeze(-1)
             assert mask.shape[:3] == to_feats.shape[:3]
-            to_feats, from_feats, out_gate = map(lambda x: x.masked_fill(mask, 0), (to_feats, from_feats, out_gate))
+            to_feats, from_feats, out_gate = map(
+                lambda x: x.masked_fill(mask, 0), (to_feats, from_feats, out_gate)
+            )
 
         args = (out_gate, to_feats, from_feats, edges)
         checkpoint_outer = self.checkpoint_outer and self.training
-        return checkpoint.checkpoint(self._to_out, *args) if checkpoint_outer else self._to_out(*args)
+        return (
+            checkpoint.checkpoint(self._to_out, *args)
+            if checkpoint_outer
+            else self._to_out(*args)
+        )
 
     def _to_out(self, out_gate, to_feats, from_feats, edges):
         # to_feats, from_feats = map(lambda x: x.half(), (to_feats, from_feats))
@@ -94,11 +109,18 @@ class TriangleAttn(nn.Module):  # noqa
         q, k, v = self.to_qkv(normed_edges).chunk(3, -1)
         g = self.to_g(normed_edges)
         b = self.to_b(normed_edges)
-        q, k, v, b, g = map(lambda x: rearrange(x, "b n m (h d) -> b h n m d", h=self.heads), (q, k, v, b, g))
+        q, k, v, b, g = map(
+            lambda x: rearrange(x, "b n m (h d) -> b h n m d", h=self.heads),
+            (q, k, v, b, g),
+        )
         b = b.squeeze(-1)
         args = (q, k, b, v, g, mask)
         checkpoint_attn = self.checkpoint_attn and self.training
-        output = checkpoint.checkpoint(self.attn_fn, *args) if checkpoint_attn else self.attn_fn(*args)
+        output = (
+            checkpoint.checkpoint(self.attn_fn, *args)
+            if checkpoint_attn
+            else self.attn_fn(*args)
+        )
         out = self.to_out(rearrange(output, "b h i j d -> b i j (h d)"))
         return self.residual(out, edges)
 
@@ -115,28 +137,44 @@ class TriangleAttn(nn.Module):  # noqa
     def _attn_starting_loop(self, q, k, b, v, g, mask: Tensor):
         out = []
         for h in range(q.shape[1]):
-            sim = torch.einsum("b i j d, b i k d -> b i j k", q[:, h, ...], k[:, h, ...]) * self.scale
+            sim = (
+                torch.einsum("b i j d, b i k d -> b i j k", q[:, h, ...], k[:, h, ...])
+                * self.scale
+            )
             sim = sim + rearrange(b[:, h, ...], "b j k -> b () j k")
             _g = g[:, h, ...]
             if exists(mask):
                 attn_mask = ~rearrange(mask, "b i j -> b i j ()")
-                sim, _g = map(lambda x: x.masked_fill(attn_mask, get_min_val(sim)), (sim, _g))
+                sim, _g = map(
+                    lambda x: x.masked_fill(attn_mask, get_min_val(sim)), (sim, _g)
+                )
 
             attn = torch.softmax(sim, dim=-1)
-            out.append(torch.sigmoid(_g) * einsum("...i j k,... i k d -> ... i j d", attn, v[:, h, ...]))
+            out.append(
+                torch.sigmoid(_g)
+                * einsum("...i j k,... i k d -> ... i j d", attn, v[:, h, ...])
+            )
         return torch.stack(out, dim=1)
 
     def _attn_ending_loop(self, q, k, b, v, g, mask: Tensor):
         out = []
         for h in range(q.shape[1]):
-            sim = torch.einsum("b i j d, b k j d -> b i j k", q[:, h, ...], k[:, h, ...]) * self.scale
+            sim = (
+                torch.einsum("b i j d, b k j d -> b i j k", q[:, h, ...], k[:, h, ...])
+                * self.scale
+            )
             sim = sim + rearrange(b[:, h, ...], "b i k -> b k () i")
             _g = g[:, h, ...]
             if exists(mask):
                 attn_mask = ~rearrange(mask, "b i j -> b i j ()")
-                sim, _g = map(lambda x: x.masked_fill(attn_mask, get_min_val(sim)), (sim, _g))
+                sim, _g = map(
+                    lambda x: x.masked_fill(attn_mask, get_min_val(sim)), (sim, _g)
+                )
             attn = torch.softmax(sim, dim=-1)
-            out.append(torch.sigmoid(_g) * einsum("...i j k,... k j d -> ... i j d", attn, v[:, h, ...]))
+            out.append(
+                torch.sigmoid(_g)
+                * einsum("...i j k,... k j d -> ... i j d", attn, v[:, h, ...])
+            )
         return torch.stack(out, dim=1)
 
     def _attn_starting(self, q, k, b, v, g, mask: Tensor):
@@ -209,7 +247,9 @@ class PairUpdateBlock(nn.Module):  # noqa
             [
                 List(
                     [
-                        LearnedOuter(dim_in=node_dim, dim_out=pair_dim) if do_pair_outer else None,
+                        LearnedOuter(dim_in=node_dim, dim_out=pair_dim)
+                        if do_pair_outer
+                        else None,
                         Residual() if do_pair_outer else None,
                     ]
                 ),
@@ -221,13 +261,21 @@ class PairUpdateBlock(nn.Module):  # noqa
         )
         self.transition = nn.Identity()
         if do_pair_outer or do_tri_mul or do_tri_attn:
-            self.transition = Transition(dim_in=pair_dim, mult=ff_mult, residual=Residual())
+            self.transition = Transition(
+                dim_in=pair_dim, mult=ff_mult, residual=Residual()
+            )
         self.do_checkpoint = do_checkpoint
 
-    def forward(self, node_feats: Tensor, pair_feats: Tensor, mask: Optional[Tensor]) -> Tensor:
+    def forward(
+        self, node_feats: Tensor, pair_feats: Tensor, mask: Optional[Tensor]
+    ) -> Tensor:
         """Perform Pair Feature Update"""
         do_checkpoint = self.do_checkpoint and self.training
-        apply_fn = lambda fn, *args: checkpoint.checkpoint(fn, *args) if do_checkpoint else fn(*args)
+        apply_fn = (
+            lambda fn, *args: checkpoint.checkpoint(fn, *args)
+            if do_checkpoint
+            else fn(*args)
+        )
         outer, outer_res = self.layers[0]
         if exists(outer):
             pair_feats = outer_res(outer(node_feats), pair_feats)

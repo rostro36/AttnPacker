@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import random
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Tuple, Union, List, Dict
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from torch import Tensor
 
 from protein_learning.common.data.data_types.protein import Protein
-from protein_learning.common.helpers import exists, default
+from protein_learning.common.helpers import default, exists
 from protein_learning.features.input_features import InputFeatures
 
 
@@ -40,7 +40,9 @@ class ExtraInput(ABC):
         """Get extra pair features (optinoal)"""
         return None
 
-    def extra_feats(self, protein: Protein) -> Tuple[Optional[Tensor], Optional[Tensor]]:
+    def extra_feats(
+        self, protein: Protein
+    ) -> Tuple[Optional[Tensor], Optional[Tensor]]:
         """Get extra features (optinoal)"""
         return self.extra_res_feats(protein), self.extra_pair_feats(protein)
 
@@ -56,10 +58,10 @@ class ExtraInput(ABC):
         return {}
 
     def load_extra_mask_inputs(
-            self,
-            seq_mask: Optional[Tensor],
-            feat_mask: Optional[Tensor],
-            inter_chain_mask: Optional[Tensor]
+        self,
+        seq_mask: Optional[Tensor],
+        feat_mask: Optional[Tensor],
+        inter_chain_mask: Optional[Tensor],
     ):
         """Load any extra inputs conditional on generated masks"""
         pass
@@ -69,11 +71,11 @@ class ModelInput:
     """Input for protein-based learning model"""
 
     def __init__(
-            self,
-            decoy: Protein,
-            native: Optional[Protein] = None,
-            input_features: Optional[InputFeatures] = None,
-            extra: Optional[ExtraInput] = None,
+        self,
+        decoy: Protein,
+        native: Optional[Protein] = None,
+        input_features: Optional[InputFeatures] = None,
+        extra: Optional[ExtraInput] = None,
     ):
         self.decoy, self.native = decoy, native
         self.input_features = input_features
@@ -81,12 +83,12 @@ class ModelInput:
         # store positions of input crop (if applicable)
         self.crop_posns = None
 
-    def crop(self, max_len, bounds = None) -> ModelInput:
+    def crop(self, max_len, bounds=None) -> ModelInput:
         """Randomly crop model input to max_len"""
         start, end = 0, len(self.decoy.seq)
         start = random.randint(0, (end - max_len)) if end > max_len else start
         end = min(end, start + max_len)
-        start, end = default(bounds,(start,end))
+        start, end = default(bounds, (start, end))
         self.crop_posns = (start, end)
         self.input_features = self.input_features.crop(start=start, end=end)
         self.decoy = self.decoy.crop(start, end)
@@ -98,14 +100,13 @@ class ModelInput:
         """Places all data on given device"""
         self.decoy = self.decoy.to(device)
 
-        self.input_features = self.input_features.to(device) if \
-            exists(self.input_features) else None
+        self.input_features = (
+            self.input_features.to(device) if exists(self.input_features) else None
+        )
 
-        self.native = self.native.to(device) if \
-            exists(self.native) else None
+        self.native = self.native.to(device) if exists(self.native) else None
 
-        self.extra = self.extra.to(device) if \
-            exists(self.extra) else None
+        self.extra = self.extra.to(device) if exists(self.extra) else None
         return self
 
     def _get_protein(self, native: bool = False, decoy: bool = False) -> Protein:
@@ -122,11 +123,11 @@ class ModelInput:
         return self._get_protein(native=native, decoy=decoy).sc_atom_tys
 
     def get_atom_coords(
-            self,
-            atom_tys: Union[str, List[str]],
-            native: bool = False,
-            decoy: bool = False,
-            coords: Optional[Tensor] = None
+        self,
+        atom_tys: Union[str, List[str]],
+        native: bool = False,
+        decoy: bool = False,
+        coords: Optional[Tensor] = None,
     ) -> Tensor:
         """Gets the atom coordinates for the given atom types
 
@@ -140,11 +141,11 @@ class ModelInput:
         return protein.get_atom_coords(atom_tys=atom_tys, coords=coords)
 
     def get_atom_masks(
-            self,
-            atom_tys: Union[str, List[str]],
-            native: bool = False,
-            decoy: bool = False,
-            mask: Optional[Tensor] = None,
+        self,
+        atom_tys: Union[str, List[str]],
+        native: bool = False,
+        decoy: bool = False,
+        mask: Optional[Tensor] = None,
     ) -> Tensor:
         """Gets the atom masks for the given atom types
 
@@ -156,14 +157,16 @@ class ModelInput:
         return ptn.get_atom_masks(atom_tys, mask=default(mask, ptn.atom_masks))
 
     def get_atom_coords_n_masks(
-            self,
-            atom_tys: Union[str, List[str]],
-            native: bool = False,
-            decoy: bool = False,
-            coords: Optional[Tensor] = None
+        self,
+        atom_tys: Union[str, List[str]],
+        native: bool = False,
+        decoy: bool = False,
+        coords: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Tensor]:
         """Get coords and masks for given atom types"""
-        coords = self.get_atom_coords(native=native, decoy=decoy, coords=coords, atom_tys=atom_tys)
+        coords = self.get_atom_coords(
+            native=native, decoy=decoy, coords=coords, atom_tys=atom_tys
+        )
         masks = self.get_atom_masks(native=native, decoy=decoy, atom_tys=atom_tys)
         return coords, masks
 

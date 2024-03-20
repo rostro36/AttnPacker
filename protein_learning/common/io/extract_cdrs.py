@@ -3,7 +3,9 @@ from typing import List
 from protein_learning.common.io.pdb_utils import extract_pdb_seq_from_pdb_file
 
 
-def extract_cdr_posns(pdb_file: str, heavy_chain_ids: List[str], light_chain_ids: List[str]):
+def extract_cdr_posns(
+    pdb_file: str, heavy_chain_ids: List[str], light_chain_ids: List[str]
+):
     """Extract 0-indexed positions of CDRs
     Params:
         pdb_file: Antibody pdb file (chothia format)
@@ -67,12 +69,12 @@ def detect_heavy_chain_cdrs(seq, residues):
             start_posns[1] = res_idx
 
         # CDR H2 End
-        if res_label in ['56']:
+        if res_label in ["56"]:
             # take the last residue with label 56
             end_posns[1] = res_idx
 
         # CDR H3 Start
-        if res_label in ['92', '95', '96',"95A"]:
+        if res_label in ["92", "95", "96", "95A"]:
             if res_label == "96" and start_posns[2] < 0:
                 start_posns[2] = res_idx - 1
             if seq[res_idx - 3] != "C":
@@ -110,7 +112,9 @@ def detect_light_chain_cdrs(seq, residues):
             start_posns[0] = res_idx
 
         # CDR-L1 end pos
-        if res_label in ["32", ]:
+        if res_label in [
+            "32",
+        ]:
             if end_posns[0] > 0:
                 continue
             end_posns[0] = res_idx
@@ -122,7 +126,7 @@ def detect_light_chain_cdrs(seq, residues):
             start_posns[1] = res_idx
 
         # CDR L2 End
-        if res_label in ['52']:
+        if res_label in ["52"]:
             if len(res.get_id()) > 2:
                 if res.get_id()[2] == "":
                     end_posns[1] = res_idx
@@ -132,7 +136,7 @@ def detect_light_chain_cdrs(seq, residues):
             end_posns[1] = res_idx
 
         # CDR L3 Start
-        if res_label in ['91']:
+        if res_label in ["91"]:
             if start_posns[2] > 0:
                 continue
             start_posns[2] = res_idx

@@ -1,15 +1,20 @@
 """SE3-Transformer configuration"""
 from __future__ import annotations
 
-from typing import Union, Tuple, Dict, Optional, Any, Callable
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from typing import Any, Callable, Dict, Optional, Tuple, Union
+
+from protein_learning.common.helpers import parse_bool
+from protein_learning.networks.common.helpers.torch_utils import (
+    fused_gelu as GELU,
+)  # noqa
 from protein_learning.networks.common.utils import default
-from protein_learning.networks.common.helpers.torch_utils import fused_gelu as GELU  # noqa
+from protein_learning.networks.config.net_config import NetConfig
+from protein_learning.networks.se3_transformer.se3_attention_config import (
+    SE3AttentionConfig,
+)
 from protein_learning.networks.tfn.repr.fiber import Fiber, cast_fiber
 from protein_learning.networks.tfn.tfn_config import TFNConfig
-from protein_learning.networks.se3_transformer.se3_attention_config import SE3AttentionConfig
-from protein_learning.networks.config.net_config import NetConfig
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-from protein_learning.common.helpers import parse_bool
 
 NONLIN = GELU
 
@@ -18,48 +23,48 @@ class SE3TransformerConfig(NetConfig):
     """Configuration for se3-transformer"""
 
     def __init__(
-            self,
-            fiber_in: Union[int, Tuple, Fiber, Dict],
-            fiber_out: Union[int, Tuple, Fiber, Dict],
-            fiber_hidden: Union[int, Tuple, Fiber, Dict] = (128, 16),
-            heads: Union[int, Tuple, Dict] = (10, 10),
-            dim_heads: Union[int, Tuple, Dict] = (20, 4),
-            edge_dim: int = None,
-            depth: int = 6,
-            conv_in_layers: int = 1,
-            conv_out_layers: int = 1,
-            differentiable_coords: bool = False,
-            global_feats_dim: Optional[int] = None,
-            attend_self: bool = True,
-            use_null_kv: bool = True,
-            linear_proj_keys: bool = False,
-            fourier_encode_rel_dist: bool = False,
-            fourier_rel_dist_feats: int = 4,
-            share_keys_and_values: bool = False,
-            hidden_mult=2,
-            project_out: bool = True,
-            norm_out: bool = True,
-            normalize_radial_dists=True,
-            use_re_zero: bool = True,
-            share_attn_weights: bool = True,
-            use_dist_sim: bool = False,
-            learn_head_weights: bool = False,
-            use_coord_attn: bool = True,
-            append_rel_dist: bool = False,
-            append_edge_attn: bool = False,
-            dropout: float = 0,
-            use_dist_conv: bool = False,
-            pairwise_dist_conv: bool = False,
-            num_dist_conv_filters: int = 16,
-            radial_dropout: float = 0.2,
-            radial_compress: bool = False,
-            radial_mult: float = 2,
-            pair_bias: bool = True,
-            append_norm: bool = False,
-            checkpoint_tfn: bool = False,
-            attn_ty: str = "tfn",
-            nonlin: Callable = GELU,
-            use_coord_layernorm: bool = False,
+        self,
+        fiber_in: Union[int, Tuple, Fiber, Dict],
+        fiber_out: Union[int, Tuple, Fiber, Dict],
+        fiber_hidden: Union[int, Tuple, Fiber, Dict] = (128, 16),
+        heads: Union[int, Tuple, Dict] = (10, 10),
+        dim_heads: Union[int, Tuple, Dict] = (20, 4),
+        edge_dim: int = None,
+        depth: int = 6,
+        conv_in_layers: int = 1,
+        conv_out_layers: int = 1,
+        differentiable_coords: bool = False,
+        global_feats_dim: Optional[int] = None,
+        attend_self: bool = True,
+        use_null_kv: bool = True,
+        linear_proj_keys: bool = False,
+        fourier_encode_rel_dist: bool = False,
+        fourier_rel_dist_feats: int = 4,
+        share_keys_and_values: bool = False,
+        hidden_mult=2,
+        project_out: bool = True,
+        norm_out: bool = True,
+        normalize_radial_dists=True,
+        use_re_zero: bool = True,
+        share_attn_weights: bool = True,
+        use_dist_sim: bool = False,
+        learn_head_weights: bool = False,
+        use_coord_attn: bool = True,
+        append_rel_dist: bool = False,
+        append_edge_attn: bool = False,
+        dropout: float = 0,
+        use_dist_conv: bool = False,
+        pairwise_dist_conv: bool = False,
+        num_dist_conv_filters: int = 16,
+        radial_dropout: float = 0.2,
+        radial_compress: bool = False,
+        radial_mult: float = 2,
+        pair_bias: bool = True,
+        append_norm: bool = False,
+        checkpoint_tfn: bool = False,
+        attn_ty: str = "tfn",
+        nonlin: Callable = GELU,
+        use_coord_layernorm: bool = False,
     ):
         super(SE3TransformerConfig, self).__init__()
         # se3 transformer input fiber
@@ -68,7 +73,13 @@ class SE3TransformerConfig(NetConfig):
         # se3 transformer output fiber
         self.fiber_out = default(cast_fiber(fiber_out), self.fiber_hidden)
         self.global_feats_dim = global_feats_dim
-        self.max_degrees = max([self.fiber_in.n_degrees, self.fiber_hidden.n_degrees, self.fiber_out.n_degrees])
+        self.max_degrees = max(
+            [
+                self.fiber_in.n_degrees,
+                self.fiber_hidden.n_degrees,
+                self.fiber_out.n_degrees,
+            ]
+        )
         self.edge_dim = edge_dim
         self.depth = depth
         self.conv_in_layers = conv_in_layers
@@ -131,12 +142,12 @@ class SE3TransformerConfig(NetConfig):
         return new_config
 
     def tfn_config(
-            self,
-            fiber_in: Optional[Fiber] = None,
-            fiber_out: Optional[Fiber] = None,
-            pool: bool = False,
-            self_interaction: bool = False,
-            **override
+        self,
+        fiber_in: Optional[Fiber] = None,
+        fiber_out: Optional[Fiber] = None,
+        pool: bool = False,
+        self_interaction: bool = False,
+        **override,
     ) -> TFNConfig:
         return TFNConfig(
             fiber_in=default(fiber_in, self.fiber_hidden),
@@ -175,63 +186,27 @@ class SE3TransformerConfig(NetConfig):
 def add_se3_options(_parser):
 
     parser = _parser.add_argument_group("se3_args")
-    parser.add_argument(
-        '--fiber_in',
-        help='',
-        type=int,
-        nargs="+",
-        default=(-1, -1)
-    )
+    parser.add_argument("--fiber_in", help="", type=int, nargs="+", default=(-1, -1))
+
+    parser.add_argument("--fiber_out", help="", type=int, nargs="+", default=(-1, -1))
 
     parser.add_argument(
-        '--fiber_out',
-        help='',
-        type=int,
-        nargs="+",
-        default=(-1, -1)
+        "--fiber_hidden", help="", type=int, nargs="+", default=(128, 16)
     )
 
-    parser.add_argument(
-        '--fiber_hidden',
-        help='',
-        type=int,
-        nargs="+",
-        default=(128, 16)
-    )
+    parser.add_argument("--se3_heads", help="", type=int, nargs="+", default=(10, 10))
 
     parser.add_argument(
-        '--se3_heads',
-        help='',
-        type=int,
-        nargs="+",
-        default=(10, 10)
+        "--se3_dim_heads", help="", type=int, nargs="+", default=(20, 4)
     )
 
-    parser.add_argument(
-        '--se3_dim_heads',
-        help='',
-        type=int,
-        nargs="+",
-        default=(20, 4)
-    )
+    parser.add_argument("--se3_edge_dim", help="", type=int, default=None)
 
-    parser.add_argument(
-        '--se3_edge_dim',
-        help='',
-        type=int,
-        default=None
-    )
-
-    parser.add_argument(
-        '--se3_depth',
-        help='',
-        type=int,
-        default=6
-    )
+    parser.add_argument("--se3_depth", help="", type=int, default=6)
 
     parser.add_argument("--append_norm", action="store_true")
-    parser.add_argument("--append_rel_dist",action="store_true")
-    parser.add_argument("--append_edge_attn",action="store_true")
-    parser.add_argument("--learn_head_weights",action="store_true")
+    parser.add_argument("--append_rel_dist", action="store_true")
+    parser.add_argument("--append_edge_attn", action="store_true")
+    parser.add_argument("--learn_head_weights", action="store_true")
 
     return _parser

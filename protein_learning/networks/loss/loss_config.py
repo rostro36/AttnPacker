@@ -1,13 +1,16 @@
 """Default Loss Function for protein learning"""
 
 from enum import Enum
-from typing import Optional, List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 from torch import nn
 
-from protein_learning.networks.common.net_utils import exists, default
+from protein_learning.networks.common.net_utils import default, exists
 from protein_learning.networks.loss.pair_loss import PairDistLossNet
-from protein_learning.networks.loss.residue_loss import SequenceRecoveryLossNet, PredLDDTLossNet
+from protein_learning.networks.loss.residue_loss import (
+    PredLDDTLossNet,
+    SequenceRecoveryLossNet,
+)
 from protein_learning.networks.loss.side_chain_loss import SideChainDeviationLoss
 
 
@@ -98,7 +101,9 @@ class LossConfig:
         # atom tys
         self.default_atom = None
         if exists(output_atom_tys):
-            self.default_atom = "CA" if "CA" in self.output_atoms else self.output_atoms[0]
+            self.default_atom = (
+                "CA" if "CA" in self.output_atoms else self.output_atoms[0]
+            )
         self.pair_dist_atom_tys = default(pair_dist_atom_tys, [self.default_atom] * 2)
         self.fape_atom_tys = default(fape_atom_tys, output_atom_tys)
         self.dist_inv_atom_tys = default(dist_inv_atom_tys, [self.default_atom] * 2)
@@ -139,7 +144,11 @@ class LossConfig:
                 loss_fns[name] = loss
                 loss_wts[name] = wt
 
-        _register_loss(SequenceRecoveryLossNet(self.res_dim, hidden_layers=1), LossTy.NSR, self.nsr_wt)
+        _register_loss(
+            SequenceRecoveryLossNet(self.res_dim, hidden_layers=1),
+            LossTy.NSR,
+            self.nsr_wt,
+        )
         _register_loss(
             PairDistLossNet(
                 dim_in=self.pair_dim,
@@ -153,11 +162,18 @@ class LossConfig:
         )
 
         _register_loss(
-            PredLDDTLossNet(self.res_dim, n_hidden_layers=1, n_bins=self.plddt_bins, atom_ty=self.plddt_atom_tys[0]),
+            PredLDDTLossNet(
+                self.res_dim,
+                n_hidden_layers=1,
+                n_bins=self.plddt_bins,
+                atom_ty=self.plddt_atom_tys[0],
+            ),
             LossTy.PLDDT,
             self.plddt_wt,
         )
 
-        _register_loss(SideChainDeviationLoss(p=self.sc_rmsd_p), LossTy.SC_RMSD, self.sc_rmsd_wt)
+        _register_loss(
+            SideChainDeviationLoss(p=self.sc_rmsd_p), LossTy.SC_RMSD, self.sc_rmsd_wt
+        )
 
         return loss_fns, loss_wts

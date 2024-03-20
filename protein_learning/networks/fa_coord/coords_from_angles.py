@@ -1,22 +1,25 @@
+from typing import Dict, Optional, Tuple
+
 import torch
-from torch import nn, Tensor
-from protein_learning.networks.common.of_rigid_utils import Rigid, Rotation
-from typing import Optional, Dict, Tuple
-from protein_learning.networks.common.of_utils import Linear
-from protein_learning.common.helpers import default, exists
+from torch import Tensor, nn
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
+
+from protein_learning.common.helpers import default, exists
+from protein_learning.networks.common.of_rigid_utils import Rigid, Rotation
+from protein_learning.networks.common.of_utils import Linear
 
 patch_typeguard()
 
 from protein_learning.protein_utils.sidechains.sidechain_rigid_utils import (
     frames_and_literature_positions_to_atom37_pos,
-    torsion_angles_to_frames,
-    restype_rigid_group_default_frame,
-    restype_atom37_to_rigid_group,
     restype_atom37_mask,
     restype_atom37_rigid_group_positions,
+    restype_atom37_to_rigid_group,
+    restype_rigid_group_default_frame,
+    torsion_angles_to_frames,
 )
+
 
 def masked_mean(mask, value, dim, eps=1e-4):
     mask = mask.expand(*value.shape)
@@ -88,7 +91,9 @@ class AngleResnet(nn.Module):
         self.linear_out = Linear(self.c_hidden, self.no_angles * 2)
         self.relu = nn.ReLU()
 
-    def forward(self, s: torch.Tensor, s_initial: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, s: torch.Tensor, s_initial: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Args:
             s:
@@ -218,7 +223,9 @@ class FACoordModule(nn.Module):
         # Separated purely to make testing less annoying
         return torsion_angles_to_frames(r, alpha, f, self.default_frames)
 
-    def frames_and_literature_positions_to_atom37_pos(self, r, f):  # [*, N, 8]  # [*, N]
+    def frames_and_literature_positions_to_atom37_pos(
+        self, r, f
+    ):  # [*, N, 8]  # [*, N]
         # Lazily initialize the residue constants on the correct device
         self._init_residue_constants(r.get_rots().dtype, r.get_rots().device)
         return frames_and_literature_positions_to_atom37_pos(
@@ -233,11 +240,11 @@ class FACoordModule(nn.Module):
     @typechecked
     def forward(
         self,
-        residue_feats: Optional[TensorType["batch","seq","hidden"]],
-        seq_encoding: TensorType["batch","seq"],
-        coords: Optional[TensorType["batch","seq","atoms",3]],
+        residue_feats: Optional[TensorType["batch", "seq", "hidden"]],
+        seq_encoding: TensorType["batch", "seq"],
+        coords: Optional[TensorType["batch", "seq", "atoms", 3]],
         rigids: Optional[Rigid],
-        angles: Optional[TensorType["batch","seq","no_angles",2]] = None,
+        angles: Optional[TensorType["batch", "seq", "no_angles", 2]] = None,
     ) -> Dict[str, Tensor]:
         # NOTE: rigids expected to be scaled (unit==angstrom)
         # AND stop grad on rigid rotation should be called *after* this forward pass
@@ -247,13 +254,15 @@ class FACoordModule(nn.Module):
         if exists(coords):
             assert coords.ndim == 4, f"{coords.shape}"
 
-        seq_encoding = torch.clamp_max(seq_encoding.clone(),20)
+        seq_encoding = torch.clamp_max(seq_encoding.clone(), 20)
 
         if not exists(rigids):
             N, CA, C, *_ = coords.unbind(dim=-2)
             rigids = Rigid.make_transform_from_reference(N, CA, C)
         if not exists(angles):
-            unnormalized_angles, angles = self.angle_resnet(residue_feats, residue_feats)
+            unnormalized_angles, angles = self.angle_resnet(
+                residue_feats, residue_feats
+            )
         else:
             unnormalized_angles = angles
 
@@ -270,11 +279,11 @@ class FACoordModule(nn.Module):
             all_rigids,
             seq_encoding,
         )
-        if self.replace_bb: #replace backbone coordinates with ground truth
-            all_coords[...,:4,:] = coords[...,:4,:]
+        if self.replace_bb:  # replace backbone coordinates with ground truth
+            all_coords[..., :4, :] = coords[..., :4, :]
         preds = {
-            #"frames": rigids.to_tensor_7(),
-            #"sidechain_frames": all_rigids.to_tensor_4x4(),
+            # "frames": rigids.to_tensor_7(),
+            # "sidechain_frames": all_rigids.to_tensor_4x4(),
             "unnormalized_angles": unnormalized_angles,
             "angles": angles,
             "positions": all_coords,

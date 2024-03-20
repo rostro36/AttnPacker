@@ -1,5 +1,6 @@
-from protein_learning.common.protein_constants import ONE_TO_THREE
 import torch
+
+from protein_learning.common.protein_constants import ONE_TO_THREE
 
 SC_ATOMS = [
     "CE3",
@@ -36,10 +37,11 @@ SC_ATOMS = [
 ]
 ATOM_ORDER = ["N", "CA", "C", "O", "CB"] + list(sorted(SC_ATOMS))
 
-import urllib
 import os
 import sys
-from typing import Optional, List, Tuple
+import urllib
+from typing import List, Optional, Tuple
+
 from protein_learning.common.helpers import default
 
 
@@ -70,7 +72,9 @@ def _write_atom(out, coords, atom_index, aa, aai, chain, atom, beta):
     atom = str.ljust(atom, 4)
     atom_type = atom[0]
     coords = "".join([str.rjust(str(round(x, 3)), 8) for x in coords.tolist()])
-    out.write(f"ATOM  {at_i} {atom} {aa.upper()} {chain}{aa_i}    {coords}  1.00 {beta:5.02f}          {atom_type}\n")
+    out.write(
+        f"ATOM  {at_i} {atom} {aa.upper()} {chain}{aa_i}    {coords}  1.00 {beta:5.02f}          {atom_type}\n"
+    )
 
 
 def atom_to_id(atom_ty):
@@ -136,7 +140,15 @@ def get_ss_blocks(sec_struc: str) -> Tuple[List[List[int]], List[str]]:
     return ss_blocks, block_labels
 
 
-def format_line(res_ty: str, atom_ty: str, coords: List, res_idx: int, atom_idx: int, chain_id: str, beta=0.0) -> str:
+def format_line(
+    res_ty: str,
+    atom_ty: str,
+    coords: List,
+    res_idx: int,
+    atom_idx: int,
+    chain_id: str,
+    beta=0.0,
+) -> str:
     """Format single line for pdb atom entry"""
     res_ty = ONE_TO_THREE[res_ty]
 

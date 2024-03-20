@@ -1,8 +1,9 @@
 import torch
-from torch import Tensor, nn
 import torch.nn.functional as F  # noqa
-from protein_learning.networks.common.constants import FUSE
 from einops import rearrange, repeat  # noqa
+from torch import Tensor, nn
+
+from protein_learning.networks.common.constants import FUSE
 
 
 @torch.jit.script
@@ -11,7 +12,6 @@ def fused_gelu(x: Tensor) -> Tensor:
 
 
 class FusedGELUModule(nn.Module):
-
     def __init__(self):
         super(FusedGELUModule, self).__init__()
 
@@ -96,7 +96,6 @@ def safe_norm(x: Tensor):
 
 
 class Fuser:
-
     def __init__(self):
         self.sigmoid = fused_sigmoid if FUSE else torch.sigmoid
         self.sigmoid_gate = fused_sigmoid_gate if FUSE else sigmoid_gate

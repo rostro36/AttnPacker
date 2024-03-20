@@ -6,13 +6,13 @@ os.environ["OPENBLAS_NUM_THREADS"] = "4"
 os.environ["MKL_NUM_THREADS"] = "4"
 os.environ["OMP_NUM_THREADS"] = "4"
 
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-
 import sys
-from pyrosetta import *
-import pyrosetta.rosetta as rosetta
-from functools import partial
 import time
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+from functools import partial
+
+import pyrosetta.rosetta as rosetta
+from pyrosetta import *
 
 init(
     "-out:levels core.conformation.Conformation:error "
@@ -25,10 +25,17 @@ init(
     "-no_his_his_pairE "
     "-linmem_ig 1"
 )
-from pyrosetta import init, Pose, get_fa_scorefxn, standard_packer_task, pose_from_file  # noqa
-from pyrosetta.rosetta import core, protocols
-import numpy as np
 from multiprocessing import Pool
+
+import numpy as np
+from pyrosetta import (
+    Pose,
+    get_fa_scorefxn,
+    init,
+    pose_from_file,  # noqa
+    standard_packer_task,
+)
+from pyrosetta.rosetta import core, protocols
 
 
 def load_list(rt, lst):
@@ -68,7 +75,9 @@ def packer_task(pdb_out, pdb_in, n_decoys=1):
         rosetta.core.pack.task.parse_resfile(test_pose, pose_packer, resfile)
         pose_packer.restrict_to_repacking()  # turns off design
         # pose_packer.or_include_current(True)  # considers original conformation
-        packmover = protocols.minimization_packing.PackRotamersMover(scorefxn, pose_packer)
+        packmover = protocols.minimization_packing.PackRotamersMover(
+            scorefxn, pose_packer
+        )
 
         scorefxn(pose)  # to prevent verbose output on the next line
         print("\nPre packing score:", scorefxn(test_pose))
@@ -96,15 +105,24 @@ def get_args(arg_list):
         default=None,
     )
 
-    parser.add_argument("list", help="list of pdbs to run on (list name relative to data_root)")
+    parser.add_argument(
+        "list", help="list of pdbs to run on (list name relative to data_root)"
+    )
 
-    parser.add_argument("native_folder", help="name of folder with native pdbs (relative to data_root)")
+    parser.add_argument(
+        "native_folder", help="name of folder with native pdbs (relative to data_root)"
+    )
 
     parser.add_argument("--start", default=0, type=int)
 
     parser.add_argument("--end", default=1000, type=int)
 
-    parser.add_argument("--out_root", default=None, type=str, help="root directory to store stats output")
+    parser.add_argument(
+        "--out_root",
+        default=None,
+        type=str,
+        help="root directory to store stats output",
+    )
 
     parser.add_argument("--resfile", default=None, type=str)
 
@@ -125,15 +143,24 @@ def get_args(arg_list):
         default=None,
     )
 
-    parser.add_argument("list", help="list of pdbs to run on (list name relative to data_root)")
+    parser.add_argument(
+        "list", help="list of pdbs to run on (list name relative to data_root)"
+    )
 
-    parser.add_argument("native_folder", help="name of folder with native pdbs (relative to data_root)")
+    parser.add_argument(
+        "native_folder", help="name of folder with native pdbs (relative to data_root)"
+    )
 
     parser.add_argument("--start", default=0, type=int)
 
     parser.add_argument("--end", default=1000, type=int)
 
-    parser.add_argument("--out_root", default=None, type=str, help="root directory to store stats output")
+    parser.add_argument(
+        "--out_root",
+        default=None,
+        type=str,
+        help="root directory to store stats output",
+    )
 
     parser.add_argument("--resfile", default=None, type=str)
     parser.add_argument("--threads", type=int, default=24)

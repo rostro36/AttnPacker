@@ -3,18 +3,17 @@ from einops import rearrange
 from torch import nn
 
 from protein_learning.networks.common.helpers.torch_utils import fused_gelu as NONLIN
-from protein_learning.networks.common.utils import default
 from protein_learning.networks.common.invariant.units import FeedForward
+from protein_learning.networks.common.utils import default
 
 
 class FiberWeightedOut(nn.Module):
-
     def __init__(
-            self,
-            fiber,
-            nonlin=NONLIN,
-            eps=1e-6,  # TODO: changed from 1e-12
-            include_order_stats=False,
+        self,
+        fiber,
+        nonlin=NONLIN,
+        eps=1e-6,  # TODO: changed from 1e-12
+        include_order_stats=False,
     ):
         super().__init__()
         self.fiber = fiber
@@ -38,31 +37,31 @@ class FiberWeightedOut(nn.Module):
 
     def forward(self, features):
         output = {}
-        norm = torch.norm(features['1'], dim=-1)
+        norm = torch.norm(features["1"], dim=-1)
         std, mean = torch.std_mean(norm, dim=1)
         rel_norm = (norm - mean) / (std + self.eps)
         if self.include_order_stats:
             m, s = mean.unsqueeze(1), std.unsqueeze(1)
             m, s = m.expand_as(rel_norm), s.expand_as(rel_norm)
-            inp = torch.cat((features['0'].squeeze(-1), rel_norm, m, s), dim=-1)
+            inp = torch.cat((features["0"].squeeze(-1), rel_norm, m, s), dim=-1)
         else:
-            inp = torch.cat((features['0'].squeeze(-1), rel_norm), dim=-1)
+            inp = torch.cat((features["0"].squeeze(-1), rel_norm), dim=-1)
         weights = self.weight_net(inp).unsqueeze(-1)
-        output['0'] = features['0']
-        output['1'] = torch.sum(features['1'] * weights, dim=-2, keepdim=True)
+        output["0"] = features["0"]
+        output["1"] = torch.sum(features["1"] * weights, dim=-2, keepdim=True)
         return output
 
 
 class WeightedOut(nn.Module):
     def __init__(
-            self,
-            coord_dim,
-            feat_dim,
-            coord_dim_out=1,
-            nonlin=NONLIN,
-            eps=1e-5,
-            include_norms=True,
-            n_hidden=1,
+        self,
+        coord_dim,
+        feat_dim,
+        coord_dim_out=1,
+        nonlin=NONLIN,
+        eps=1e-5,
+        include_norms=True,
+        n_hidden=1,
     ):
         super().__init__()
         self.nonlin = nonlin
@@ -94,8 +93,18 @@ class WeightedOut(nn.Module):
 class RadialFunc(nn.Module):
     """NN parameterized radial profile function."""
 
-    def __init__(self, num_freq, in_dim, out_dim, edge_dim=None, mid_dim=None, nonlin=NONLIN,
-                 hidden_layer: bool = True, compress=False, dropout=0.0):
+    def __init__(
+        self,
+        num_freq,
+        in_dim,
+        out_dim,
+        edge_dim=None,
+        mid_dim=None,
+        nonlin=NONLIN,
+        hidden_layer: bool = True,
+        compress=False,
+        dropout=0.0,
+    ):
         super().__init__()
         self.num_freq = num_freq
         self.in_dim = in_dim
@@ -104,12 +113,14 @@ class RadialFunc(nn.Module):
         self.out_dim = out_dim
         bias = dropout > 0
 
-        layer = lambda i, o, norm=True: nn.ModuleList([
-            nn.Linear(i, o),
-            nn.LayerNorm(o) if norm else nn.Identity,
-            nonlin(),
-            nn.Dropout(dropout) if dropout > 0 else nn.Identity()
-        ])
+        layer = lambda i, o, norm=True: nn.ModuleList(
+            [
+                nn.Linear(i, o),
+                nn.LayerNorm(o) if norm else nn.Identity,
+                nonlin(),
+                nn.Dropout(dropout) if dropout > 0 else nn.Identity(),
+            ]
+        )
         if not compress:
             self.net = nn.Sequential(
                 *layer(edge_dim, mid_dim),
@@ -127,7 +138,9 @@ class RadialFunc(nn.Module):
 
     def forward(self, x):
         y = self.net(x)
-        return rearrange(y, '... (o i f) -> ... o () i () f', i=self.in_dim, o=self.out_dim)
+        return rearrange(
+            y, "... (o i f) -> ... o () i () f", i=self.in_dim, o=self.out_dim
+        )
 
 
 class RadialKernel(nn.Module):
@@ -147,8 +160,10 @@ class RadialKernel(nn.Module):
         return self._dist_bins
 
     def forward(self, dists):
-        print('in radial kernel')
+        print("in radial kernel")
         kernels = self.bin_embedding(self.dist_bins(dists.device))
         actual_bins = torch.round(torch.clamp((dists - 2.4) / 0.4, 0, 33)).long()
         kernels = kernels[actual_bins].squeeze(-2)
-        return rearrange(kernels, '... (o i f) -> ... o () i () f', i=self.in_dim, o=self.out_dim)
+        return rearrange(
+            kernels, "... (o i f) -> ... o () i () f", i=self.in_dim, o=self.out_dim
+        )

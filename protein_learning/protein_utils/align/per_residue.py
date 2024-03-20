@@ -1,16 +1,18 @@
 from math import sqrt
-from typing import Tuple, Optional
-from torch import Tensor
+from typing import Optional, Tuple
+
 import torch
-from einops import rearrange # noqa
-from protein_learning.protein_utils.align.kabsch_align import _calc_kabsch_rot_n_trans
+from einops import rearrange  # noqa
+from torch import Tensor
+
 from protein_learning.common.helpers import default
+from protein_learning.protein_utils.align.kabsch_align import _calc_kabsch_rot_n_trans
 
 
 def get_per_res_alignment(
-        align_to: Tensor,
-        align_from: Tensor,
-        to_align: Optional[Tensor] = None,
+    align_to: Tensor,
+    align_from: Tensor,
+    to_align: Optional[Tensor] = None,
 ) -> Tensor:
     """aligns atom coordinates on a per-residue basis
 
@@ -28,10 +30,7 @@ def get_per_res_alignment(
     rot, trans_to, trans_from = get_rot_n_trans_for_per_res_align(align_to, align_from)
     to_align = default(to_align, align_from)
     aligned_coords = apply_rot_n_trans_for_per_res_align(
-        coords=to_align,
-        rot=rot,
-        pre_rot_trans=trans_from,
-        post_rot_trans=trans_to
+        coords=to_align, rot=rot, pre_rot_trans=trans_from, post_rot_trans=trans_to
     )
     return aligned_coords
 
@@ -52,7 +51,9 @@ def impute_beta_carbon(bb_coords: Tensor) -> Tensor:
     return CA + (t1 + t2)
 
 
-def get_rot_n_trans_for_per_res_align(align_to: Tensor, align_from: Tensor) -> Tuple[Tensor, ...]:
+def get_rot_n_trans_for_per_res_align(
+    align_to: Tensor, align_from: Tensor
+) -> Tuple[Tensor, ...]:
     """Gets rotation and translation mapping per-residue native coordinate frames into
     respective decoy frames
     :param align_to: coordinates to align to (n,a,3) - second axis is atom type
@@ -60,17 +61,19 @@ def get_rot_n_trans_for_per_res_align(align_to: Tensor, align_from: Tensor) -> T
     :return: tensor of rotations (n,3,3) and tensor of translations (n,1,3)
     """
     assert align_from.ndim == align_to.ndim == 3
-    rot, trans_to, trans_from = _calc_kabsch_rot_n_trans(align_to=align_to, align_from=align_from)
+    rot, trans_to, trans_from = _calc_kabsch_rot_n_trans(
+        align_to=align_to, align_from=align_from
+    )
     rot = rearrange(rot, "a b c -> a c b")
     return rot, trans_to, trans_from
 
 
 def apply_rot_n_trans_for_per_res_align(
-        coords: Tensor,
-        rot: Tensor,
-        pre_rot_trans: Tensor,
-        post_rot_trans: Tensor,
-        enable_grad: bool = False
+    coords: Tensor,
+    rot: Tensor,
+    pre_rot_trans: Tensor,
+    post_rot_trans: Tensor,
+    enable_grad: bool = False,
 ) -> Tensor:
     """Applies rotation and translation on a per-residue basis to the input coords
     :param coords: per-residue coordinates (n,a,3) - (sequence, atom_ty, coord)
@@ -83,7 +86,11 @@ def apply_rot_n_trans_for_per_res_align(
     :return: native coordinates with rotation and translation applied - (n,a,c)
     """
     device = coords.device
-    rot, pre_rot_trans, post_rot_trans = rot.to(device), pre_rot_trans.to(device), post_rot_trans.to(device)
+    rot, pre_rot_trans, post_rot_trans = (
+        rot.to(device),
+        pre_rot_trans.to(device),
+        post_rot_trans.to(device),
+    )
     with torch.set_grad_enabled(enable_grad):
         # first rotate, then translate
         coords = coords - pre_rot_trans

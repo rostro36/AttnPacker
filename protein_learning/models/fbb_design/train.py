@@ -1,5 +1,6 @@
 """Train Masked Design Model"""
 from __future__ import annotations
+
 import os
 
 # eb47fd6 dec 22
@@ -9,25 +10,31 @@ os.environ["OPENBLAS_NUM_THREADS"] = "4"
 os.environ["MKL_NUM_THREADS"] = "4"
 os.environ["OMP_NUM_THREADS"] = "4"
 from functools import partial
+from typing import Any
 
 import numpy as np
 import torch
-from protein_learning.features.input_embedding import InputEmbedding
-from protein_learning.models.fbb_design.train_utils import TrainDesign
-from protein_learning.networks.geometric_gt.geom_gt_config import add_gt_options, get_configs as get_gt_configs
-from protein_learning.networks.loss.loss_fn import LossConfig, DefaultLossFunc
-from protein_learning.features.default_feature_generator import DefaultFeatureGenerator
-from protein_learning.common.data.data_types.protein import Protein
-from protein_learning.models.fbb_design.fbb_model import FBBDesigner
-from protein_learning.networks.se3_transformer.se3_transformer_config import SE3TransformerConfig, add_se3_options
-from protein_learning.models.utils.dataset_augment_fns import impute_cb
+from torch import Tensor
+
 from protein_learning.common.data.data_types.model_input import ExtraInput
 from protein_learning.common.data.data_types.protein import Protein
+from protein_learning.common.helpers import exists
 from protein_learning.common.protein_constants import AA_TO_INDEX
 from protein_learning.common.rigids import Rigids
-from torch import Tensor
-from typing import Any
-from protein_learning.common.helpers import exists
+from protein_learning.features.default_feature_generator import DefaultFeatureGenerator
+from protein_learning.features.input_embedding import InputEmbedding
+from protein_learning.models.fbb_design.fbb_model import FBBDesigner
+from protein_learning.models.fbb_design.train_utils import TrainDesign
+from protein_learning.models.utils.dataset_augment_fns import impute_cb
+from protein_learning.networks.geometric_gt.geom_gt_config import add_gt_options
+from protein_learning.networks.geometric_gt.geom_gt_config import (
+    get_configs as get_gt_configs,
+)
+from protein_learning.networks.loss.loss_fn import DefaultLossFunc, LossConfig
+from protein_learning.networks.se3_transformer.se3_transformer_config import (
+    SE3TransformerConfig,
+    add_se3_options,
+)
 
 
 class ExtraFBB(ExtraInput):
@@ -46,7 +53,9 @@ class ExtraFBB(ExtraInput):
         self.decoy_rigids = decoy_rigids
         self.native = native_protein
         self.decoy = decoy_protein
-        self.native_seq_enc = native_seq_enc if native_seq_enc.ndim == 2 else native_seq_enc.unsqueeze(0)
+        self.native_seq_enc = (
+            native_seq_enc if native_seq_enc.ndim == 2 else native_seq_enc.unsqueeze(0)
+        )
 
     def crop(self, start, end) -> ExtraFBB:
         """Crop native seq. encoding"""
@@ -105,7 +114,9 @@ class Train(TrainDesign):
     @property
     def global_override(self):
         """kwargs to override in global config"""
-        return dict(max_len=440, lr=0.0005)  # ,checkpoint_idx=14)#raise_exceptions=False, max_len=388)
+        return dict(
+            max_len=440, lr=0.0005
+        )  # ,checkpoint_idx=14)#raise_exceptions=False, max_len=388)
 
     @property
     def model_override(self):
@@ -120,7 +131,9 @@ class Train(TrainDesign):
         parser.add_argument("--use_tfn", action="store_true")
         parser.add_argument("--coord_noise", default=0, type=float)
         parser.add_argument("--torsion_loss_weight", default=0.2, type=float)
-        parser.add_argument("--no_predict_from_angles", action="store_false", dest="predict_from_angles")
+        parser.add_argument(
+            "--no_predict_from_angles", action="store_false", dest="predict_from_angles"
+        )
         parser.add_argument("--predict_bb", action="store_true")
         add_gt_options(parser)
         add_se3_options(parser)

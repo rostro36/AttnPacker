@@ -1,15 +1,16 @@
 """Utility functions for working with protein side-chains"""
-from typing import Tuple, Union, List
+from typing import List, Tuple, Union
 
 import torch
 from einops import rearrange, repeat  # noqa
 from torch import Tensor
-from scp_postprocess.helpers import masked_mean, batched_index_select, disable_tf32
-import scp_postprocess.sidechain_rigid_utils as scru
-import scp_postprocess.protein_constants as pc
+from torch.cuda.amp import autocast
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
-from torch.cuda.amp import autocast
+
+import scp_postprocess.protein_constants as pc
+import scp_postprocess.sidechain_rigid_utils as scru
+from scp_postprocess.helpers import batched_index_select, disable_tf32, masked_mean
 
 cos_max, cos_min = (1 - 1e-9), -(1 - 1e-9)
 min_norm_clamp = 1e-9
@@ -53,7 +54,9 @@ def get_sc_dihedral(
     reshape_chi_mask = rearrange(chi_mask, "n g -> g n")  # nx4 -> 4xn
     assert reshape_chi_mask.shape[0] == 4, f"{reshape_chi_mask.shape}"
     reshaped_indices = rearrange(chi_indices, "n g a -> g n a")
-    assert reshaped_indices.shape[0] == reshaped_indices.shape[-1] == 4, f"{reshaped_indices.shape}"
+    assert (
+        reshaped_indices.shape[0] == reshaped_indices.shape[-1] == 4
+    ), f"{reshaped_indices.shape}"
     m = reshape_chi_mask.shape[0]
     assert m <= 4, f"{reshape_chi_mask.shape}"
     coords = coords if coords.ndim == 4 else coords.unsqueeze(0)
@@ -85,12 +88,15 @@ def _per_residue_rmsd(
     if not reduce:
         return masked_mean(tmp, mask, dim=-1)
     else:
-        return torch.sum(masked_mean(tmp, mask, dim=-1)) / max(1, torch.sum(mask.any(dim=-1)))
+        return torch.sum(masked_mean(tmp, mask, dim=-1)) / max(
+            1, torch.sum(mask.any(dim=-1))
+        )
 
 
 @typechecked
 def swap_symmetric_atoms(
-    atom_coords: TensorType["batch", "seq", "atoms", 3], seq_encoding: TensorType["batch", "seq"]
+    atom_coords: TensorType["batch", "seq", "atoms", 3],
+    seq_encoding: TensorType["batch", "seq"],
 ) -> TensorType["batch", "seq", "atoms", 3]:
     """swap symmetric side chain atom coordinates"""
     left_mask = pc.RES_TO_LEFT_SYMM_SC_ATOM_MASK.to(seq_encoding.device)
@@ -118,15 +124,23 @@ def align_symmetric_sidechains(
     align_tol: float = 0.25,
 ):
     """Align side chain atom coordinates"""
-    assert native_coords.shape == predicted_coords.shape, f"{native_coords.shape},{predicted_coords.shape}"
+    assert (
+        native_coords.shape == predicted_coords.shape
+    ), f"{native_coords.shape},{predicted_coords.shape}"
     assert native_coords.shape[-2] == 37 == atom_mask.shape[-1]
 
-    aligned_native, aligned_pred = native_coords.detach().clone(), predicted_coords.detach().clone()
-    target_frames = SimpleRigids.IdentityRigid(aligned_native.shape[:2], aligned_native.device)
+    aligned_native, aligned_pred = (
+        native_coords.detach().clone(),
+        predicted_coords.detach().clone(),
+    )
+    target_frames = SimpleRigids.IdentityRigid(
+        aligned_native.shape[:2], aligned_native.device
+    )
     bb_rmsd = ca_rmsd(native_coords, predicted_coords)
     if bb_rmsd > align_tol:
         target_frames, frames = map(
-            lambda x: SimpleRigids.RigidFromBackbone(x[..., :3, :]), (aligned_native, aligned_pred)
+            lambda x: SimpleRigids.RigidFromBackbone(x[..., :3, :]),
+            (aligned_native, aligned_pred),
         )
         aligned_native = target_frames.apply_inverse(aligned_native)
         aligned_pred = frames.apply_inverse(aligned_pred)

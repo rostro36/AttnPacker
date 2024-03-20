@@ -1,30 +1,32 @@
 """Configuration for Invariant Point Attention"""
-from typing import Optional
+from typing import List, Optional, Tuple, Union
+
 from protein_learning.networks.config.net_config import NetConfig
-from typing import Tuple, Union, List
 
 
 class IPAConfig(NetConfig):
     """Evoformer configuration"""
 
     def __init__(
-            self,
-            scalar_dim_in: int,
-            pair_dim: Optional[int],
-            coord_dim_out: Optional[int] = 4,
-            heads: int = 8,
-            scalar_kv_dims: Union[int, List[int]] = 16,
-            point_kv_dims: Union[int, List[int]] = 4,
-            depth: int = 1,
-            dropout: float = 0,
-            ff_mult: float = 4,
-            num_ff_layers: int = 2,
-            share_weights: bool = False,
-            use_dist_sim: bool = True,
-            use_rigids: bool = True,
+        self,
+        scalar_dim_in: int,
+        pair_dim: Optional[int],
+        coord_dim_out: Optional[int] = 4,
+        heads: int = 8,
+        scalar_kv_dims: Union[int, List[int]] = 16,
+        point_kv_dims: Union[int, List[int]] = 4,
+        depth: int = 1,
+        dropout: float = 0,
+        ff_mult: float = 4,
+        num_ff_layers: int = 2,
+        share_weights: bool = False,
+        use_dist_sim: bool = True,
+        use_rigids: bool = True,
     ):
         super(IPAConfig, self).__init__()
-        to_dims = lambda x: x if (isinstance(x, list) or isinstance(x, tuple)) else [x] * 2
+        to_dims = (
+            lambda x: x if (isinstance(x, list) or isinstance(x, tuple)) else [x] * 2
+        )
         scalar_kv_dims, point_kv_dims = map(to_dims, (scalar_kv_dims, point_kv_dims))
         self.scalar_kv_dims, self.point_kv_dims = scalar_kv_dims, point_kv_dims
         self.scalar_dim_in = scalar_dim_in

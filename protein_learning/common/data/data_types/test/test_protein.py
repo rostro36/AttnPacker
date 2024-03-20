@@ -28,8 +28,8 @@ def test_crop():
         name="test",
         sec_struct="".join(["H"] * n),
     )
-    ptn.make_complex(partition=[torch.arange(30),torch.arange(70)+30])
-    ptn = ptn.restrict_to(indices=[torch.arange(20),torch.arange(50)+40])
+    ptn.make_complex(partition=[torch.arange(30), torch.arange(70) + 30])
+    ptn = ptn.restrict_to(indices=[torch.arange(20), torch.arange(50) + 40])
     print("chain")
     print(ptn.chain_indices)
     print("res ids")

@@ -1,7 +1,28 @@
 import torch
 
 AA_ALPHABET = "".join(
-    ["A", "R", "N", "D", "C", "Q", "E", "G", "H", "I", "L", "K", "M", "F", "P", "S", "T", "W", "Y", "V"]
+    [
+        "A",
+        "R",
+        "N",
+        "D",
+        "C",
+        "Q",
+        "E",
+        "G",
+        "H",
+        "I",
+        "L",
+        "K",
+        "M",
+        "F",
+        "P",
+        "S",
+        "T",
+        "W",
+        "Y",
+        "V",
+    ]
 )
 RES_TYPES = [x for x in AA_ALPHABET]
 AA_ALPHABET += "X-"
@@ -246,11 +267,15 @@ for atom in HBOND_ACCEPTORS:
 # HBOND_ACCEPTORS = [("SER","OG"),("THR","OG1"),("GLU","OE1"),("GLU","OE2"),("ASP","OD1"),("ASP","OD2"),("GLN","OE1"),("HIS","ND1"),("HIS","NE2"),("TYR","OH"),("ASN","OD2")]
 
 
-to_posns = lambda chi: {THREE_TO_ONE[res]: [ALL_ATOM_POSNS[atom] for atom in chi[res]] for res in chi}
+to_posns = lambda chi: {
+    THREE_TO_ONE[res]: [ALL_ATOM_POSNS[atom] for atom in chi[res]] for res in chi
+}
 
 
 def to_chi_posns(chi):
-    return {THREE_TO_ONE[res]: [ALL_ATOM_POSNS[atom] for atom in chi[res]] for res in chi}
+    return {
+        THREE_TO_ONE[res]: [ALL_ATOM_POSNS[atom] for atom in chi[res]] for res in chi
+    }
 
 
 CHI1 = {
@@ -452,7 +477,9 @@ for res in RES_TYPES:
 # mask_left[seq,i], mask_right[seq,i] are atoms that should be swapped
 # shapes here are (N_RES, 37, 2)
 RES_TO_LEFT_SYMM_SC_ATOM_MASK = torch.stack(RES_TO_LEFT_SYMM_SC_ATOM_MASK, dim=0).bool()
-RES_TO_RIGHT_SYMM_SC_ATOM_MASK = torch.stack(RES_TO_RIGHT_SYMM_SC_ATOM_MASK, dim=0).bool()
+RES_TO_RIGHT_SYMM_SC_ATOM_MASK = torch.stack(
+    RES_TO_RIGHT_SYMM_SC_ATOM_MASK, dim=0
+).bool()
 
 
 class DSSPKeys:
@@ -461,14 +488,29 @@ class DSSPKeys:
     REL_ASA = 3
     PHI = 4
     PSI = 5
-    SS_key_map = {"S": 1, "H": 2, "T": 3, "I": 4, "E": 5, "G": 6, "L": 7, "B": 8, "-": 0}
+    SS_key_map = {
+        "S": 1,
+        "H": 2,
+        "T": 3,
+        "I": 4,
+        "E": 5,
+        "G": 6,
+        "L": 7,
+        "B": 8,
+        "-": 0,
+    }
 
 
 # FROM https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2810841/
 BOND_LENS = {("N", "C"): 1.33, ("CA", "CA"): 3.8, ("CA", "C"): 1.51, ("N", "CA"): 1.46}
 BOND_LENS.update({(k[1], k[0]): v for k, v in BOND_LENS.items()})
 BOND_LEN_SIGMA = 3
-BOND_LEN_TOL = {("N", "C"): 0.01, ("CA", "CA"): 0.016, ("CA", "C"): 0.01, ("N", "CA"): 0.01}
+BOND_LEN_TOL = {
+    ("N", "C"): 0.01,
+    ("CA", "CA"): 0.016,
+    ("CA", "C"): 0.01,
+    ("N", "CA"): 0.01,
+}
 BOND_LEN_TOL = {k: v * BOND_LEN_SIGMA for k, v in BOND_LEN_TOL.items()}
 BOND_LEN_TOL.update({(k[1], k[0]): v for k, v in BOND_LEN_TOL.items()})
 BOND_LEN_OFFSET = {("N", "C"): 1, ("CA", "CA"): 1, ("CA", "C"): 0, ("N", "CA"): 0}
@@ -478,7 +520,11 @@ BOND_ANGLE_SIGMA = 4
 BOND_ANGLES = {("N", "CA", "C"): 111, ("CA", "C", "N"): 117.2, ("C", "N", "CA"): 121.7}
 BOND_ANGLE_TOL = {("N", "CA", "C"): 2.8, ("CA", "C", "N"): 2.0, ("C", "N", "CA"): 1.8}
 BOND_ANGLE_TOL = {k: v * BOND_ANGLE_SIGMA for k, v in BOND_ANGLE_TOL.items()}
-BOND_ANGLE_OFFSET = {("N", "CA", "C"): (0, 0, 0), ("CA", "C", "N"): (0, 0, 1), ("C", "N", "CA"): (0, 1, 1)}
+BOND_ANGLE_OFFSET = {
+    ("N", "CA", "C"): (0, 0, 0),
+    ("CA", "C", "N"): (0, 0, 1),
+    ("C", "N", "CA"): (0, 1, 1),
+}
 
 VDW_RADIUS = dict(C=1.7, O=1.52, N=1.55, S=1.8)
 ALL_ATOM_VDW_RADII = {}
@@ -519,7 +565,13 @@ INTRA_RES_BONDS = dict(
         ("C", "O", 1.231),
         ("CG", "OD2", 1.208),
     },
-    C={("CA", "N", 1.458), ("CB", "SG", 1.809), ("C", "CA", 1.523), ("CA", "CB", 1.529), ("C", "O", 1.231)},
+    C={
+        ("CA", "N", 1.458),
+        ("CB", "SG", 1.809),
+        ("C", "CA", 1.523),
+        ("CA", "CB", 1.529),
+        ("C", "O", 1.231),
+    },
     Q={
         ("CA", "N", 1.458),
         ("CB", "CG", 1.519),
@@ -612,7 +664,13 @@ INTRA_RES_BONDS = dict(
         ("CD", "CG", 1.506),
         ("CD", "N", 1.444),
     },
-    S={("CA", "N", 1.458), ("C", "CA", 1.523), ("CB", "OG", 1.401), ("C", "O", 1.231), ("CA", "CB", 1.516)},
+    S={
+        ("CA", "N", 1.458),
+        ("C", "CA", 1.523),
+        ("CB", "OG", 1.401),
+        ("C", "O", 1.231),
+        ("CA", "CB", 1.516),
+    },
     T={
         ("CA", "N", 1.458),
         ("CA", "CB", 1.54),

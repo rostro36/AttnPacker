@@ -1,32 +1,33 @@
 import math
 from enum import Enum
 from functools import partial
-from typing import Optional, Callable, Tuple
+from typing import Callable, Optional, Tuple
 
 import torch
-from torch import nn, einsum, Tensor
+from torch import Tensor, einsum, nn
 
 from protein_learning.common.helpers import default, safe_norm
 from protein_learning.networks.common.net_utils import FeedForward
 
 
 class LinearInitTy(Enum):
-    UNIFORM = 'uniform'
+    UNIFORM = "uniform"
     NON_NEG_UNIFORM = "non_neg_uniform"
-    DEFAULT = 'default'
-    CONSTANT = 'constant'
-    IDENTITY = 'identity'
-    RELU = 'relu'
+    DEFAULT = "default"
+    CONSTANT = "constant"
+    IDENTITY = "identity"
+    RELU = "relu"
 
 
 class LinearInit:
-    def __init__(self,
-                 weight_init_ty: LinearInitTy = LinearInitTy.DEFAULT,
-                 weight_init_val: Optional[float] = None,
-                 bias_init_ty: LinearInitTy = LinearInitTy.DEFAULT,
-                 bias_init_val: Optional[float] = None,
-                 use_bias: bool = False
-                 ):
+    def __init__(
+        self,
+        weight_init_ty: LinearInitTy = LinearInitTy.DEFAULT,
+        weight_init_val: Optional[float] = None,
+        bias_init_ty: LinearInitTy = LinearInitTy.DEFAULT,
+        bias_init_val: Optional[float] = None,
+        use_bias: bool = False,
+    ):
         self.weight_init_ty = weight_init_ty
         self.weight_init_val = weight_init_val
         self.bias_init_ty = bias_init_ty
@@ -40,17 +41,17 @@ class LinearInit:
             wt_init_val=self.weight_init_val,
             bias_init_ty=self.bias_init_ty,
             bias_init_val=self.bias_init_val,
-            override=override
+            override=override,
         )
 
 
 def _linear_init(
-        param,
-        wt_init_ty: LinearInitTy,
-        bias_init_ty: LinearInitTy,
-        wt_init_val: Optional[float] = None,
-        bias_init_val: Optional[float] = None,
-        override: bool = False,
+    param,
+    wt_init_ty: LinearInitTy,
+    bias_init_ty: LinearInitTy,
+    wt_init_val: Optional[float] = None,
+    bias_init_val: Optional[float] = None,
+    override: bool = False,
 ):
     if wt_init_ty == LinearInitTy.IDENTITY:
         nn.init.eye_(param.weight)
@@ -58,9 +59,13 @@ def _linear_init(
             nn.init.constant_(param.bias, 0)
         return
 
-    if not override and (not isinstance(param, nn.Linear) or not isinstance(param, VNLinear)):
+    if not override and (
+        not isinstance(param, nn.Linear) or not isinstance(param, VNLinear)
+    ):
         return
-    items = zip([wt_init_ty, bias_init_ty], ["weight", "bias"], [wt_init_val, bias_init_val])
+    items = zip(
+        [wt_init_ty, bias_init_ty], ["weight", "bias"], [wt_init_val, bias_init_val]
+    )
 
     for (ty, key, val) in items:
         if not hasattr(param, key) or getattr(param, key) is None:
@@ -95,8 +100,9 @@ class LinearKernel(nn.Module):
     def __init__(self, coord_dim, feature_dim, coord_dim_out=None, mult=2):
         super().__init__()
         coord_dim_out = default(coord_dim_out, coord_dim)
-        self.transform = FeedForward(dim_in=feature_dim, mult=mult,
-                                     dim_out=coord_dim * coord_dim_out)
+        self.transform = FeedForward(
+            dim_in=feature_dim, mult=mult, dim_out=coord_dim * coord_dim_out
+        )
         self.coord_dim_out = coord_dim_out
 
     def forward(self, rel_coords, pair_feats):
@@ -107,8 +113,10 @@ class LinearKernel(nn.Module):
         """
         view = pair_feats.shape[:-1]
         # can think of as a learned per-point kernel
-        kernel = self.transform(pair_feats).reshape(*view, self.coord_dim_out, rel_coords.shape[-2])
-        return einsum('...ij,...jk->...ik', kernel, rel_coords)
+        kernel = self.transform(pair_feats).reshape(
+            *view, self.coord_dim_out, rel_coords.shape[-2]
+        )
+        return einsum("...ij,...jk->...ik", kernel, rel_coords)
 
 
 class VNLinear(nn.Module):
@@ -126,19 +134,22 @@ class VNLinear(nn.Module):
     """
 
     def __init__(
-            self,
-            dim_in: int,
-            dim_out: int = None,
-            init: LinearInit = None,
+        self,
+        dim_in: int,
+        dim_out: int = None,
+        init: LinearInit = None,
     ):
         super().__init__()
         init: LinearInit = default(init, LinearInit())
         dim_out = default(dim_out, dim_in)
-        self.weight, self.bias = nn.Parameter(torch.randn(dim_in, dim_out) / math.sqrt(dim_in)), None
+        self.weight, self.bias = (
+            nn.Parameter(torch.randn(dim_in, dim_out) / math.sqrt(dim_in)),
+            None,
+        )
         self.apply(init.init_func(override=True))
 
     def forward(self, x):
-        return einsum('b n d c, d e -> b n e c', x, self.weight)
+        return einsum("b n d c, d e -> b n e c", x, self.weight)
 
 
 class GVPLinear(nn.Module):
@@ -147,12 +158,13 @@ class GVPLinear(nn.Module):
     https://openreview.net/pdf?id=1YLJDvSx6J4 (see fig. 1, Algorithm 1.).
     """
 
-    def __init__(self,
-                 dim_in: Tuple[int, int],
-                 dim_out: Optional[Tuple[int, int]] = None,
-                 norm_scale: float = 0.1,
-                 use_scalar_bias: bool = True
-                 ):
+    def __init__(
+        self,
+        dim_in: Tuple[int, int],
+        dim_out: Optional[Tuple[int, int]] = None,
+        norm_scale: float = 0.1,
+        use_scalar_bias: bool = True,
+    ):
         """
         :param dim_in: scalar and coordinate input dimension
         :param dim_out: scalar and coordinate output dimension
@@ -169,9 +181,13 @@ class GVPLinear(nn.Module):
         scalar_dim_in = self.dim_out[1] + self.dim_in[0]
         self.coord_message = VNLinear(self.dim_in[1], coord_dim_hidden)
         self.coord_proj = VNLinear(coord_dim_hidden, self.dim_out[1])
-        self.scalar_proj = nn.Linear(scalar_dim_in, self.dim_out[0], bias=use_scalar_bias)
+        self.scalar_proj = nn.Linear(
+            scalar_dim_in, self.dim_out[0], bias=use_scalar_bias
+        )
 
-    def forward(self, scalar_feats: Tensor, coord_feats: Tensor) -> Tuple[Tensor, Tensor]:
+    def forward(
+        self, scalar_feats: Tensor, coord_feats: Tensor
+    ) -> Tuple[Tensor, Tensor]:
         """Apply GVP Linear Layer.
 
         This layer is equivalent to the GVP feedforward block minus the

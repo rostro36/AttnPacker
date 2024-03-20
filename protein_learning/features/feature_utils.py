@@ -2,26 +2,29 @@
 """
 from __future__ import annotations
 
-from typing import Optional, List, Tuple, Dict, Any, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 from einops import rearrange  # noqa
-from protein_learning.common.transforms import (  # noqa
-    quaternion_multiply,  # noqa
-    quaternion_to_matrix,  # noqa
-    matrix_to_quaternion,  # noqa
-    quaternion_invert,  # noqa
-    quaternion_apply,  # noqa
-)
 from torch import Tensor
 
-from protein_learning.common.helpers import exists, coords_to_rel_coords, safe_normalize
+from protein_learning.common.helpers import coords_to_rel_coords, exists, safe_normalize
 from protein_learning.common.protein_constants import AA_INDEX_MAP
+from protein_learning.common.transforms import matrix_to_quaternion  # noqa
+from protein_learning.common.transforms import quaternion_apply  # noqa
+from protein_learning.common.transforms import quaternion_invert  # noqa
+from protein_learning.common.transforms import quaternion_multiply  # noqa
+from protein_learning.common.transforms import quaternion_to_matrix  # noqa; noqa
 from protein_learning.features.feature import Feature
-from protein_learning.features.feature_config import FeatureTy, FeatureName
+from protein_learning.features.feature_config import FeatureName, FeatureTy
 from protein_learning.features.input_features import PI
-from protein_learning.protein_utils.dihedral.orientation_utils import get_bb_dihedral, get_tr_rosetta_orientation_mats
-from protein_learning.protein_utils.sidechains.sidechain_rigid_utils import atom37_to_torsion_angles
+from protein_learning.protein_utils.dihedral.orientation_utils import (
+    get_bb_dihedral,
+    get_tr_rosetta_orientation_mats,
+)
+from protein_learning.protein_utils.sidechains.sidechain_rigid_utils import (
+    atom37_to_torsion_angles,
+)
 
 
 def string_encode(mapping: Dict[str, int], *x, device: Any = "cpu") -> Tensor:
@@ -31,7 +34,9 @@ def string_encode(mapping: Dict[str, int], *x, device: Any = "cpu") -> Tensor:
     :param device: device to place output tensor on
     :return: encoded strings accordint to given mapping
     """
-    assert all([len(el) == len(x[0]) for el in x]), "ERROR: all strings must have same length"
+    assert all(
+        [len(el) == len(x[0]) for el in x]
+    ), "ERROR: all strings must have same length"
     out = torch.tensor([[mapping[pos] for pos in el] for el in x], device=device)
     return out[0] if len(x) == 1 else out
 
@@ -84,7 +89,9 @@ def res_ty_encoding(
     seq_emb = string_encode(AA_INDEX_MAP, seq)
     if corrupt_prob > 0:
         corrupt_mask = torch.rand(len(seq)) < corrupt_prob
-        corrupt_aas = torch.randint(0, 20, size=(len(corrupt_mask[corrupt_mask]),))  # noqa
+        corrupt_aas = torch.randint(
+            0, 20, size=(len(corrupt_mask[corrupt_mask]),)
+        )  # noqa
         seq_emb[corrupt_mask] = corrupt_aas
 
     return Feature(
@@ -97,10 +104,14 @@ def res_ty_encoding(
     )
 
 
-def rel_pos_encoding(res_ids: Union[Tensor, List[Tensor]], n_classes: int = 10) -> Feature:
+def rel_pos_encoding(
+    res_ids: Union[Tensor, List[Tensor]], n_classes: int = 10
+) -> Feature:
     """Encodes each residue position based on the relative position in the sequence."""
     res_ids = [res_ids] if torch.is_tensor(res_ids) else res_ids
-    assert all([torch.all(res_ids[i] >= 0) for i in range(len(res_ids))]), f"{res_ids}"  # noqa
+    assert all(
+        [torch.all(res_ids[i] >= 0) for i in range(len(res_ids))]
+    ), f"{res_ids}"  # noqa
     encs = []
     for ids in res_ids:
         max_posn, _ = torch.max(ids, dim=-1, keepdim=True)
@@ -125,11 +136,15 @@ def bb_dihedral_encoding(
 ) -> Feature:
     """BB DIhedral Features (encoded or raw)"""
     assert exists(bb_dihedrals) or exists(bb_coords)
-    phi, psi, omega = bb_dihedrals if exists(bb_dihedrals) else get_bb_dihedral(*bb_coords)
+    phi, psi, omega = (
+        bb_dihedrals if exists(bb_dihedrals) else get_bb_dihedral(*bb_coords)
+    )
     bb_dihedrals = torch.cat([x.unsqueeze(-1) for x in (phi, psi, omega)], dim=-1)
     encoded_bb_dihedrals = None
     if encode:
-        encoded_bb_dihedrals = torch.clamp(((bb_dihedrals / PI) + 1) / 2, 0, 1) * (n_classes - 1)
+        encoded_bb_dihedrals = torch.clamp(((bb_dihedrals / PI) + 1) / 2, 0, 1) * (
+            n_classes - 1
+        )
     return Feature(
         raw_data=bb_dihedrals,
         encoded_data=encoded_bb_dihedrals,
@@ -176,7 +191,9 @@ def rel_sep_encoding(res_ids: Union[Tensor, List[Tensor]], sep_bins: List) -> Fe
     """Relative Separation Encoding"""
     res_ids = [res_ids] if torch.is_tensor(res_ids) else res_ids
     res_posns = torch.cat(res_ids, dim=-1)
-    sep_mat = rearrange(res_posns, "n -> () n ()") - rearrange(res_posns, "n -> n () ()")  # noqa
+    sep_mat = rearrange(res_posns, "n -> () n ()") - rearrange(
+        res_posns, "n -> n () ()"
+    )  # noqa
     enc_sep_mat = bin_encode(sep_mat, bins=torch.tensor(sep_bins))
     assert torch.all(enc_sep_mat >= 0)
     return Feature(
@@ -215,7 +232,11 @@ def tr_rosetta_ori_encoding(
     tr_angles: Optional[Tuple[Tensor, ...]] = None,
 ) -> Feature:
     """trRosetta dihedral features"""
-    phi, psi, omega = get_tr_rosetta_orientation_mats(*bb_coords) if not exists(tr_angles) else tr_angles
+    phi, psi, omega = (
+        get_tr_rosetta_orientation_mats(*bb_coords)
+        if not exists(tr_angles)
+        else tr_angles
+    )
     ori_feats = torch.cat([x.unsqueeze(-1) for x in (phi, psi, omega)], dim=-1)
     encoded_ori_feats = None
     if encode:
@@ -263,7 +284,9 @@ def local_rel_coords(ca_coords: Tensor, quats: Tensor) -> Feature:
 
 def rel_chain_encoding(chain_ids) -> Feature:
     """Encode relative chain"""
-    diffs = rearrange(chain_ids, "i -> i () ()") - rearrange(chain_ids, "i -> () i ()")  # noqa
+    diffs = rearrange(chain_ids, "i -> i () ()") - rearrange(
+        chain_ids, "i -> () i ()"
+    )  # noqa
     clamped_diffs = (2 + torch.clamp(diffs, min=-1, max=1)).long()
     return Feature(
         raw_data=diffs,
@@ -279,14 +302,18 @@ def extra_encoding(extra: Tensor, ty: FeatureTy) -> Feature:
     return Feature(
         raw_data=extra.float(),
         encoded_data=extra.float(),
-        name=FeatureName.EXTRA_RES.value if ty == FeatureTy.RESIDUE else FeatureName.EXTRA_PAIR.value,
+        name=FeatureName.EXTRA_RES.value
+        if ty == FeatureTy.RESIDUE
+        else FeatureName.EXTRA_PAIR.value,
         ty=ty,
         n_classes=extra.shape[-1],
     )
 
 
 def sc_dihedral_encoding(coords, mask, sequence_enc):
-    coords, mask, sequence_enc = map(lambda x: x.unsqueeze(0) if x.shape[0] > 1 else x, (coords, mask, sequence_enc))
+    coords, mask, sequence_enc = map(
+        lambda x: x.unsqueeze(0) if x.shape[0] > 1 else x, (coords, mask, sequence_enc)
+    )
     ptn = dict(aatype=sequence_enc, all_atom_positions=coords, all_atom_mask=mask)
     torsion_info = atom37_to_torsion_angles(ptn)
     sin_cos = safe_normalize(torsion_info["torsion_angles_sin_cos"].detach()).squeeze(0)

@@ -1,6 +1,7 @@
+from typing import List, Tuple, Union
+
 import torch
 from torch import Tensor
-from typing import Tuple, Union, List
 
 cos_max, cos_min = (1 - 1e-9), -(1 - 1e-9)
 min_norm_clamp = 1e-9
@@ -53,8 +54,14 @@ def signed_dihedral_all_12(ps: List[Tensor]) -> Tensor:
         p0, p1, p2, p3 = ps
         b0, b1, b2 = p0 - p1, p2.unsqueeze(-3) - p1.unsqueeze(-2), p3 - p2
         b1 = b1 / torch.norm(b1, dim=-1, keepdim=True).clamp_min(min_norm_clamp)
-        v = b0.unsqueeze(-2) - torch.sum(b0.unsqueeze(-2) * b1, dim=-1, keepdim=True) * b1
-        w = b2.unsqueeze(-3) - torch.sum(b2.unsqueeze(-3) * b1, dim=-1, keepdim=True) * b1
+        v = (
+            b0.unsqueeze(-2)
+            - torch.sum(b0.unsqueeze(-2) * b1, dim=-1, keepdim=True) * b1
+        )
+        w = (
+            b2.unsqueeze(-3)
+            - torch.sum(b2.unsqueeze(-3) * b1, dim=-1, keepdim=True) * b1
+        )
         x = torch.sum(v * w, dim=-1)
         y = torch.sum(torch.cross(b1, v) * w, dim=-1)
     return torch.atan2(y, x)
@@ -72,7 +79,9 @@ def signed_dihedral_all_123(ps) -> Tensor:
         b0, b1, b2 = p0 - p1, p2 - p1, p3.unsqueeze(-3) - p2.unsqueeze(-2)
         b1 = b1 / torch.norm(b1, dim=-1, keepdim=True).clamp_min(min_norm_clamp)
         v = b0 - torch.sum(b0 * b1, dim=-1, keepdim=True) * b1
-        w = b2 - torch.sum(b2 * b1.unsqueeze(-2), dim=-1, keepdim=True) * b1.unsqueeze(-2)
+        w = b2 - torch.sum(b2 * b1.unsqueeze(-2), dim=-1, keepdim=True) * b1.unsqueeze(
+            -2
+        )
         x = torch.sum(v.unsqueeze(-2) * w, dim=-1)
         y = torch.sum(torch.cross(b1, v).unsqueeze(-2) * w, dim=-1)
         ret = torch.atan2(y, x)

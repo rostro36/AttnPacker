@@ -1,10 +1,15 @@
 """Tests for feature masking"""
+import torch
+
+from protein_learning.common.data.data_types.protein import Protein
 from protein_learning.features.feature_config import (
-    InputFeatureConfig, AA_ALPHABET, FeatureName, FeatureTy, FeatureEmbeddingTy
+    AA_ALPHABET,
+    FeatureEmbeddingTy,
+    FeatureName,
+    FeatureTy,
+    InputFeatureConfig,
 )
 from protein_learning.features.feature_generator import DefaultFeatureGenerator
-from protein_learning.common.data.data_types.protein import Protein
-import torch
 
 config_kwargs = dict(
     one_hot_res_ty=True,
@@ -37,7 +42,12 @@ def test_scalar_masking():
     feat_gen = DefaultFeatureGenerator(config=CONFIG)
     feats = feat_gen.generate_features(protein=TEST_PROTEIN)
 
-    expected_names = [FeatureName.RES_TY, FeatureName.CENTRALITY, FeatureName.REL_POS, FeatureName.BB_DIHEDRAL]
+    expected_names = [
+        FeatureName.RES_TY,
+        FeatureName.CENTRALITY,
+        FeatureName.REL_POS,
+        FeatureName.BB_DIHEDRAL,
+    ]
     actual_names = []
     for feat_desc in CONFIG.descriptors:
         if feat_desc.ty == FeatureTy.RESIDUE:

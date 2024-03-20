@@ -1,5 +1,5 @@
 """Protein Complex dataset"""
-from typing import Optional, List, Any, Callable, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 import torch
 
@@ -14,14 +14,16 @@ from protein_learning.common.data.datasets.utils import (
 )
 from protein_learning.common.global_constants import get_logger
 from protein_learning.common.helpers import default, exists
-#from protein_learning.common.io.dips_utils import load_proteins_from_dill
+
+# from protein_learning.common.io.dips_utils import load_proteins_from_dill
 from protein_learning.features.feature_generator import FeatureGenerator
 
 logger = get_logger(__name__)
 
-cast_list = lambda x: x if isinstance(x, list) else [x] # noqa
+cast_list = lambda x: x if isinstance(x, list) else [x]  # noqa
 
-def load_proteins_from_dill(*args,**kwargs):
+
+def load_proteins_from_dill(*args, **kwargs):
     raise Exception("Removed")
 
 
@@ -39,9 +41,13 @@ class ProteinDataset(ProteinDatasetABC):
         shuffle: bool = True,
         atom_tys: Optional[List[str]] = None,
         crop_len: int = -1,
-        augment_fn: Callable[[Protein, Protein], ExtraInput] = lambda *args, **kwargs: None,
+        augment_fn: Callable[
+            [Protein, Protein], ExtraInput
+        ] = lambda *args, **kwargs: None,
         filter_fn: Callable[[Protein, Protein], bool] = lambda native, decoy: True,
-        transform_fn: Callable[[Protein, Protein], Tuple[Protein, Protein]] = lambda native, decoy: (native, decoy),
+        transform_fn: Callable[
+            [Protein, Protein], Tuple[Protein, Protein]
+        ] = lambda native, decoy: (native, decoy),
         load_sec_structure: bool = True,
         ignore_res_ids: bool = False,
         load_native_ss: bool = False,
@@ -80,7 +86,9 @@ class ProteinDataset(ProteinDatasetABC):
         native_pdb_path: Optional[Union[str, List[str]]],
     ) -> Optional[ModelInput]:
         """Load data given native and decoy pdb paths and sequence path"""
-        seq_paths, decoy_pdbs, native_pdbs = map(cast_list, (seq_path, decoy_pdb_path, native_pdb_path))
+        seq_paths, decoy_pdbs, native_pdbs = map(
+            cast_list, (seq_path, decoy_pdb_path, native_pdb_path)
+        )
         if exists(decoy_pdbs[0]):
             assert len(decoy_pdbs) == len(native_pdbs), f"{decoy_pdbs}\n{native_pdbs}"
         seq_paths = seq_paths if exists(seq_paths[0]) else seq_paths * len(native_pdbs)
@@ -88,11 +96,15 @@ class ProteinDataset(ProteinDatasetABC):
 
         decoy_seqs, native_seqs, decoy_proteins, native_proteins = [], [], [], []
         if not native_pdbs[0].endswith(".dill"):
-            for seq_path, decoy_pdb, native_pdb in zip(seq_paths, decoy_pdbs, native_pdbs):
+            for seq_path, decoy_pdb, native_pdb in zip(
+                seq_paths, decoy_pdbs, native_pdbs
+            ):
                 try:
                     decoy_seqs.append(self.safe_load_sequence(seq_path, decoy_pdb))
                     if self.ignore_seqs:
-                        native_seqs.append(self.safe_load_sequence(seq_path, native_pdb))
+                        native_seqs.append(
+                            self.safe_load_sequence(seq_path, native_pdb)
+                        )
                     else:
                         native_seqs.append(decoy_seqs[-1])
                 except Exception as e:
@@ -101,12 +113,18 @@ class ProteinDataset(ProteinDatasetABC):
                         raise e
                     return None
 
-            for native_pdb, decoy_pdb, decoy_seq, native_seq in zip(native_pdbs, decoy_pdbs, decoy_seqs, native_seqs):
+            for native_pdb, decoy_pdb, decoy_seq, native_seq in zip(
+                native_pdbs, decoy_pdbs, decoy_seqs, native_seqs
+            ):
                 try:
                     _nat = self.get_ptn(native_pdb, native_seq, lss=self.load_native_ss)
-                    _decoy = self.get_ptn(decoy_pdb, decoy_seq, lss=self.load_sec_structure)
+                    _decoy = self.get_ptn(
+                        decoy_pdb, decoy_seq, lss=self.load_sec_structure
+                    )
                     if not self.ignore_seqs:
-                        _nat, _decoy = restrict_protein_to_aligned_residues(_nat, _decoy)
+                        _nat, _decoy = restrict_protein_to_aligned_residues(
+                            _nat, _decoy
+                        )
                     native_proteins.append(_nat)
                     decoy_proteins.append(_decoy)
                 except Exception as e:
@@ -133,11 +151,15 @@ class ProteinDataset(ProteinDatasetABC):
             n1, n2 = map(len, native_proteins)
             partition = [torch.arange(n1), torch.arange(n1, n1 + n2)]
             native_cas = list(map(lambda x: x["CA"], native_proteins))
-            p1, p2 = get_dimer_spatial_crop(partition, native_cas, crop_len=self.crop_len)
+            p1, p2 = get_dimer_spatial_crop(
+                partition, native_cas, crop_len=self.crop_len
+            )
             native = native_proteins[0].add_chain(native_proteins[1])
             decoy = decoy_proteins[0].add_chain(decoy_proteins[1])
             if len(native) != len(decoy):
-                print(f"[WARNING] length mismatch (native,decoy) {len(native)},{len(decoy)}")
+                print(
+                    f"[WARNING] length mismatch (native,decoy) {len(native)},{len(decoy)}"
+                )
                 return None
             native, decoy = map(lambda x: x.restrict_to([p1, p2]), (native, decoy))
             input_partition = [p1, p2]

@@ -1,27 +1,30 @@
 import torch
 
-torch.multiprocessing.set_sharing_strategy('file_system')
-from torch.utils.data import Dataset
-from protein_learning.models.model_abc.protein_model import ProteinModel
-from protein_learning.common.data.data_types.model_output import ModelOutput, ModelInput
-from typing import Optional, Dict, Tuple, NamedTuple, List
-from protein_learning.training.trainer import Trainer
-from protein_learning.training.train_utils import EvalTy
-from protein_learning.common.global_config import GlobalConfig
-import numpy as np
-import time
-from protein_learning.assessment.model_eval.stats_handler import LossHandler
-from protein_learning.common.helpers import exists, default
-from enum import Enum
-from protein_learning.common.data.data_types.protein import Protein
-import os
-from protein_learning.features.masking.masking_utils import get_chain_masks
-import traceback
-from protein_learning.common.data.datasets.utils import set_canonical_coords_n_masks
-from torch.cuda.amp import autocast
-from copy import deepcopy
+torch.multiprocessing.set_sharing_strategy("file_system")
 import math
+import os
+import time
+import traceback
+from copy import deepcopy
+from enum import Enum
+from typing import Dict, List, NamedTuple, Optional, Tuple
+
+import numpy as np
+from protein_learning.training.train_utils import EvalTy
+from protein_learning.training.trainer import Trainer
+from torch.cuda.amp import autocast
+from torch.utils.data import Dataset
+
+from protein_learning.assessment.model_eval.stats_handler import LossHandler
+from protein_learning.common.data.data_types.model_output import ModelInput, ModelOutput
+from protein_learning.common.data.data_types.protein import Protein
+from protein_learning.common.data.datasets.utils import set_canonical_coords_n_masks
+from protein_learning.common.global_config import GlobalConfig
+from protein_learning.common.helpers import default, exists
 from protein_learning.common.rigids import Rigids
+from protein_learning.features.masking.masking_utils import get_chain_masks
+from protein_learning.models.model_abc.protein_model import ProteinModel
+
 
 class StatsKeys(Enum):
     NSR = "nsr"
@@ -52,19 +55,19 @@ class ModelEvaluator:
     """Evaluate a model"""
 
     def __init__(
-            self,
-            stats_config: StatsConfig,
-            global_config: Optional[GlobalConfig],
-            model: Optional[ProteinModel],
-            pdb_dir: Optional[str],
-            dataset: Dataset,
-            max_samples: int = -1,
-            use_custom_forward: bool = False,
-            model_path: Optional[str] = None,
-            raise_exceptions: bool = True,
-            pdb_only=False,
-            use_amp = False,
-            chunk_len=800,
+        self,
+        stats_config: StatsConfig,
+        global_config: Optional[GlobalConfig],
+        model: Optional[ProteinModel],
+        pdb_dir: Optional[str],
+        dataset: Dataset,
+        max_samples: int = -1,
+        use_custom_forward: bool = False,
+        model_path: Optional[str] = None,
+        raise_exceptions: bool = True,
+        pdb_only=False,
+        use_amp=False,
+        chunk_len=800,
     ):
         self.use_amp = use_amp
         self.stats_config = stats_config
@@ -84,29 +87,29 @@ class ModelEvaluator:
         self.stats_data = []
         self.pdb_only = pdb_only
         self.use_amp = use_amp
-        self.chunk_len=chunk_len
+        self.chunk_len = chunk_len
 
     def _init_model(self, model_path: str) -> Tuple[Trainer, ProteinModel]:
         trainer = Trainer(
             config=self.global_config,
             model=self.model,
             train_data=self.dataset,  # noqa
-            load_optim = False,
+            load_optim=False,
         )
         trainer._init_model(model_path=model_path)  # noqa
         trainer.model = trainer.model.eval().to(self.global_config.device)
         return trainer, trainer.model
 
     def write_predicted_pdb(
-            self,
-            model_out: ModelOutput,
-            seq: Optional[str],
+        self,
+        model_out: ModelOutput,
+        seq: Optional[str],
     ) -> List[str]:
         """Write predicted pdbs"""
-        
+
         pred_protein = make_predicted_protein(model_out, seq=seq)
         pdb_path = os.path.join(self.pdb_dir, model_out.decoy_protein.name)
-        #pdb_path = random_name(pdb_path + "_")
+        # pdb_path = random_name(pdb_path + "_")
         chains, names = ["A", "B"], []
 
         if model_out.native.n_chains > 1:
@@ -140,14 +143,16 @@ class ModelEvaluator:
             pred_pdbs = self.write_predicted_pdb(model_out, seq=pred_seq)
         _chain_masks = get_chain_masks(
             len(model_out.decoy_protein),
-            chain_indices=model_out.decoy_protein.chain_indices
+            chain_indices=model_out.decoy_protein.chain_indices,
         )
         chain_masks, chain_pair_masks, inter_chain_mask = _chain_masks
         seq_mask, res_feat_mask, inter_chain_feat_mask = [None] * 3
         if exists(model_out.model_input.input_features):
             seq_mask = model_out.model_input.input_features.seq_mask
             res_feat_mask = model_out.model_input.input_features.feat_mask
-            inter_chain_feat_mask = model_out.model_input.input_features.inter_chain_mask
+            inter_chain_feat_mask = (
+                model_out.model_input.input_features.inter_chain_mask
+            )
         return dict(
             pred_pdbs=pred_pdbs,
             native_chain_pdbs=model_out.native.chain_names,
@@ -180,15 +185,15 @@ class ModelEvaluator:
         if not self.pdb_only:
             stats.update(
                 get_handler_stats(
-                    handler=self.handler,
-                    config=self.stats_config,
-                    model_out=model_out
+                    handler=self.handler, config=self.stats_config, model_out=model_out
                 )
             )
         pred_seq = None
         if StatsKeys.NSR.value in stats:
             pred_seq = stats[StatsKeys.NSR.value]["pred_seq"]
-        stats[StatsKeys.METADATA.value] = self.get_metadata(model_out, pred_seq=pred_seq)
+        stats[StatsKeys.METADATA.value] = self.get_metadata(
+            model_out, pred_seq=pred_seq
+        )
         stats[StatsKeys.METADATA.value]["inference_time"] = inf_time
         stats["extra"] = extra
         self.stats_data.append(_convert_dict(stats))
@@ -196,9 +201,7 @@ class ModelEvaluator:
     def evaluate_from_pdb(self, device="cpu"):
         """Evaluate dataset"""
         data = self.dataset.get_dataloader(  # noqa
-            batch_size=min(len(self.dataset), 8),
-            num_workers=4,
-            shuffle=False
+            batch_size=min(len(self.dataset), 8), num_workers=4, shuffle=False
         )
         print(f"[INFO] beginning evaluation of {len(self.dataset)} targets")
         for idx, batch_data in enumerate(data):
@@ -216,12 +219,10 @@ class ModelEvaluator:
     def evaluate(self, n_replicas: int = 1, **fwd_kwargs):
         """Evaluate dataset"""
         for replica in range(n_replicas):
-            if hasattr(self.dataset, 'replica'):
+            if hasattr(self.dataset, "replica"):
                 self.dataset.replica = replica
             data = self.dataset.get_dataloader(  # noqa
-                batch_size=min(len(self.dataset), 8),
-                num_workers=4,
-                shuffle=False
+                batch_size=min(len(self.dataset), 8), num_workers=4, shuffle=False
             )
             n_processed = 0
             print(f"[INFO] Beginning evaluation of {len(self.dataset)} targets...")
@@ -229,8 +230,10 @@ class ModelEvaluator:
                 for idx, batch_data in enumerate(data):
                     start = time.time()
                     n_hit, n_miss = self._eval_batch(batch_data, **fwd_kwargs)
-                    print(f"[INFO] finished evaluation batch in time"
-                          f" {np.round(time.time() - start, 2)} seconds")
+                    print(
+                        f"[INFO] finished evaluation batch in time"
+                        f" {np.round(time.time() - start, 2)} seconds"
+                    )
                     print(f"[INFO] number of samples processed successfully {n_hit}")
                     print(f"[INFO] number of samples missed {n_miss}")
                     n_processed += n_hit
@@ -244,18 +247,14 @@ class ModelEvaluator:
             try:
                 start = time.time()
                 if self.use_custom_forward:
-                    model_out, extra, sts = self.custom_forward(
-                        sample,
-                        **fwd_kwargs
-                    )
+                    model_out, extra, sts = self.custom_forward(sample, **fwd_kwargs)
                 else:
                     seq_len = len(sample.native.seq)
-                    print(f"[INFO] : starting forward pass for {sample.native.name}, seq len: {seq_len}")
-                    if seq_len>self.chunk_len:
-                        model_out = self.chunk_inference(
-                            sample,
-                            max_len=self.chunk_len
-                        )
+                    print(
+                        f"[INFO] : starting forward pass for {sample.native.name}, seq len: {seq_len}"
+                    )
+                    if seq_len > self.chunk_len:
+                        model_out = self.chunk_inference(sample, max_len=self.chunk_len)
                     else:
                         model_out = self.safe_eval(
                             sample,
@@ -265,7 +264,11 @@ class ModelEvaluator:
                     continue
 
             except Exception as e:
-                nm = sample.native.name if (exists(sample) and exists(sample.native)) else None
+                nm = (
+                    sample.native.name
+                    if (exists(sample) and exists(sample.native))
+                    else None
+                )
                 print(f"[ERROR] caught exception {e} running forward pass")
                 print(traceback.format_exc())
                 if self.raise_exceptions:
@@ -282,80 +285,93 @@ class ModelEvaluator:
                 print(f"caught exception {e} gathering stats")
                 if self.raise_exceptions:
                     raise e
-                nm = sample.native.name if (exists(sample) and exists(sample.native)) else None
+                nm = (
+                    sample.native.name
+                    if (exists(sample) and exists(sample.native))
+                    else None
+                )
                 print(f"Skipping {nm}")
                 n_miss += 1
                 continue
             n_hit += 1
-            print(f"[INFO] : finished forward pass for {sample.native.name}, \
+            print(
+                f"[INFO] : finished forward pass for {sample.native.name}, \
                 inference time : {inference_times[-1]}"
-             )
+            )
         return n_hit, n_miss
 
     def safe_eval(
         self,
         sample: ModelInput,
-        crop = None,
+        crop=None,
     ) -> ModelOutput:
         """Evaluate model and (optionally) catch exceptions"""
-        device, max_len = self.global_config.device,self.global_config.max_len
+        device, max_len = self.global_config.device, self.global_config.max_len
         with autocast(enabled=self.use_amp):
             with torch.no_grad():
                 sample = sample.to(device).crop(max_len, bounds=crop)
                 model_out = self.model.eval()(sample)
-                return model_out#.detach()
+                return model_out  # .detach()
 
-    
     def chunk_inference(
-            self,
-            sample: ModelInput,
-            max_len: int = 500,
+        self,
+        sample: ModelInput,
+        max_len: int = 500,
     ):
         seq_len = len(sample.decoy.seq)
-        crops, crop_offset = get_inference_crops(max_len,seq_len=seq_len)
+        crops, crop_offset = get_inference_crops(max_len, seq_len=seq_len)
         output = []
         for crop in crops:
             sample_copy = deepcopy(sample)
-            output.append(self.safe_eval(sample=sample_copy,crop=crop))
-        
+            output.append(self.safe_eval(sample=sample_copy, crop=crop))
+
         device = output[0].scalar_output.device
         scalar_out_shape = output[0].scalar_output.shape
-        predicted_coords = torch.zeros(1,seq_len,37,3,device=device)
-        scalar_output = torch.zeros(1,seq_len,scalar_out_shape[-1],device=device)
-        quats,translations,angles=None,None,None
+        predicted_coords = torch.zeros(1, seq_len, 37, 3, device=device)
+        scalar_output = torch.zeros(1, seq_len, scalar_out_shape[-1], device=device)
+        quats, translations, angles = None, None, None
         if exists(output[0].angles):
-            angles = torch.zeros(1,seq_len,*output[0].angles.shape[2:], device = device)
+            angles = torch.zeros(1, seq_len, *output[0].angles.shape[2:], device=device)
         if exists(output[0].pred_rigids):
-            quats = torch.zeros(1,seq_len,*output[0].pred_rigids.quaternions.shape[2:], device = device)
-            translations = torch.zeros(1,seq_len,*output[0].pred_rigids.translations.shape[2:], device = device)
+            quats = torch.zeros(
+                1, seq_len, *output[0].pred_rigids.quaternions.shape[2:], device=device
+            )
+            translations = torch.zeros(
+                1, seq_len, *output[0].pred_rigids.translations.shape[2:], device=device
+            )
 
-        
         for i in range(len(crops)):
-            offset = 0 if i==0 else crop_offset//2
+            offset = 0 if i == 0 else crop_offset // 2
             start, end = crops[i]
             curr_out = output[i]
-            scalar_output[:,start+offset:end] = curr_out.scalar_output[:,offset:]
-            predicted_coords[:,start+offset:end] = curr_out.predicted_coords[:,offset:]
+            scalar_output[:, start + offset : end] = curr_out.scalar_output[:, offset:]
+            predicted_coords[:, start + offset : end] = curr_out.predicted_coords[
+                :, offset:
+            ]
             if exists(curr_out.pred_rigids):
-                translations[:,start+offset:end] = curr_out.pred_rigids.translations[:,offset:]
-                quats[:,start+offset:end] = curr_out.pred_rigids.quaternions[:,offset:]
+                translations[
+                    :, start + offset : end
+                ] = curr_out.pred_rigids.translations[:, offset:]
+                quats[:, start + offset : end] = curr_out.pred_rigids.quaternions[
+                    :, offset:
+                ]
             if exists(curr_out.angles):
-                angles[:,start+offset:end] = curr_out.angles[:,offset:]
+                angles[:, start + offset : end] = curr_out.angles[:, offset:]
 
-
-        #overwrite model out features
+        # overwrite model out features
         return ModelOutput(
             scalar_output=scalar_output,
             predicted_coords=predicted_coords,
             pair_output=torch.ones(1),
             model_input=sample.to(device),
-            extra = dict(
-                pred_rigids = Rigids(quats,translations) if exists(quats) else None,
-                chain_indices = sample.decoy.chain_indices,
-                angles = angles,
-                unnormalized_angles=angles
-            )
+            extra=dict(
+                pred_rigids=Rigids(quats, translations) if exists(quats) else None,
+                chain_indices=sample.decoy.chain_indices,
+                angles=angles,
+                unnormalized_angles=angles,
+            ),
         )
+
     """
     def _init_model(self, model: torch.nn.Module, model_path: Optional[str] = None):
         print("[INFO] initializing model...")
@@ -364,22 +380,25 @@ class ModelEvaluator:
         model.load_state_dict(checkpoint['model'], strict=True)
         return model
     """
+
+
 """Helper Methods"""
 
+
 def get_inference_crops(
-        max_len,
-        seq_len,
-    ):
-    crop_offset = min(max_len//2,200)
-    n_crops = math.ceil(seq_len/(max_len-crop_offset))
-    crop_len = math.ceil(seq_len/n_crops) + crop_offset
-    crops, start = [(0,max_len)], max_len-crop_offset
-    while start < seq_len-crop_offset:
-        crop = (start,min(seq_len,start+max_len))
+    max_len,
+    seq_len,
+):
+    crop_offset = min(max_len // 2, 200)
+    n_crops = math.ceil(seq_len / (max_len - crop_offset))
+    crop_len = math.ceil(seq_len / n_crops) + crop_offset
+    crops, start = [(0, max_len)], max_len - crop_offset
+    while start < seq_len - crop_offset:
+        crop = (start, min(seq_len, start + max_len))
         crops.append(crop)
         start += max_len - crop_offset
     crops = crops[:-1]
-    crops.append((seq_len-max_len,seq_len))
+    crops.append((seq_len - max_len, seq_len))
     return crops, crop_offset
 
 
@@ -410,9 +429,7 @@ def _convert_dict(data, tab="") -> Dict:
 
 
 def get_handler_stats(
-        handler: LossHandler,
-        config: StatsConfig,
-        model_out: ModelOutput
+    handler: LossHandler, config: StatsConfig, model_out: ModelOutput
 ) -> Dict:
     """Get stats from loss handler"""
     stats = {}
@@ -423,7 +440,7 @@ def get_handler_stats(
         (StatsKeys.LDDT, handler.get_lddt_data, config.get_lddt_stats),
         (StatsKeys.CONTACTS, handler.get_contact_data, config.get_contact_stats),
         (StatsKeys.MAE, handler.get_mae_data, config.get_mae_stats),
-        (StatsKeys.DIST, handler.get_predicted_dist_data, config.get_distance_stats)
+        (StatsKeys.DIST, handler.get_predicted_dist_data, config.get_distance_stats),
     ]
     for key, fn, use in tmp:
         try:
@@ -435,14 +452,11 @@ def get_handler_stats(
     return stats
 
 
-
-
-def make_predicted_protein(model_out: ModelOutput, seq: Optional[str] = None) -> Protein:
+def make_predicted_protein(
+    model_out: ModelOutput, seq: Optional[str] = None
+) -> Protein:
     """Constructs predicted protein"""
     coords = model_out.predicted_coords.squeeze(0)
-    pred_protein = model_out.decoy_protein.from_coords_n_seq(coords,seq)
+    pred_protein = model_out.decoy_protein.from_coords_n_seq(coords, seq)
     pred_protein = set_canonical_coords_n_masks(pred_protein, overwrite=True)
     return pred_protein
-
-
-

@@ -2,7 +2,7 @@
 import os
 import sys
 from argparse import Namespace
-from typing import Dict, Union, Optional, Tuple, Any
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -10,11 +10,11 @@ from protein_learning.common.global_config import (
     GlobalConfig,
     load_config,
     load_npy,
-    save_config,
-    print_config,
     make_config,
+    print_config,
+    save_config,
 )
-from protein_learning.common.helpers import exists, default
+from protein_learning.common.helpers import default, exists
 from protein_learning.common.io.utils import parse_arg_file
 
 
@@ -23,7 +23,9 @@ def get_arg_list_from_std_in():
     return parse_arg_file(arg_file) if exists(arg_file) else ["-h"]
 
 
-def get_args_n_groups(parser, arg_list=None):  # -> Tuple[Namespace, Dict[str, Namespace]]:
+def get_args_n_groups(
+    parser, arg_list=None
+):  # -> Tuple[Namespace, Dict[str, Namespace]]:
     arg_list = arg_list if exists(arg_list) else get_arg_list_from_std_in()
     args = parser.parse_args(arg_list)
     arg_groups = {}
@@ -56,7 +58,9 @@ def load_args_for_eval(
         for key in group_dict:
             if key not in curr_arg_dict:
                 if key != "help":
-                    print(f"[WARNING] : no value for key {key}, arg_group : {group_name}")
+                    print(
+                        f"[WARNING] : no value for key {key}, arg_group : {group_name}"
+                    )
                 continue
             group_dict[key] = curr_arg_dict[key]
         loaded_arg_groups[group_name] = group_dict
@@ -94,11 +98,15 @@ def load_n_save_args(
     """Load and save model arguments"""
     # Set up model args
     if exists(model_config_path) or getattr(args, "force_override", False):
-        pth = default(model_config_path, getattr(args, "global_config_override_path", None))
+        pth = default(
+            model_config_path, getattr(args, "global_config_override_path", None)
+        )
         print(f"[INFO] loading and overriding global config!")
         print(f"\tmodel config path (given) : {model_config_path}")
         print(f"\tmodel config path (used) {pth}")
-        config = override_config_from_path(path=pth, override=default(global_override, dict()))
+        config = override_config_from_path(
+            path=pth, override=default(global_override, dict())
+        )
     else:
         config = make_config(args.model_config)
     if config.load_state or force_load:
@@ -126,7 +134,9 @@ def load_args(
     suffix: str = "model_args",
     override: Optional[Dict[str, Any]] = None,
     model_override: Optional[Dict[str, Any]] = None,
-) -> Union[Tuple[GlobalConfig, Namespace], Tuple[GlobalConfig, Namespace, Dict[str, Namespace]]]:
+) -> Union[
+    Tuple[GlobalConfig, Namespace], Tuple[GlobalConfig, Namespace, Dict[str, Namespace]]
+]:
     """Load model arguments from paths"""
     config = load_config(curr_config, **default(override, {}))
     path = os.path.join(config.param_directory, config.name + f"_{suffix}.npy")
@@ -168,7 +178,9 @@ def save_args(config: GlobalConfig, args: Namespace, suffix: str = "model_args")
 
 
 def print_args(
-    config: Optional[GlobalConfig], args: Optional[Namespace], arg_groups: Optional[Dict[str, Namespace]] = None
+    config: Optional[GlobalConfig],
+    args: Optional[Namespace],
+    arg_groups: Optional[Dict[str, Namespace]] = None,
 ):
     """Print model args"""
     if exists(config):

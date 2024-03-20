@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from math import log2
-from typing import Optional, Union, Any
+from typing import Any, Optional, Union
 
 import numpy as np
 import torch
@@ -19,10 +19,10 @@ class ModelLoss:
     """Tracks model loss"""
 
     def __init__(
-            self,
-            seq_len: Optional[int] = None,
-            pdb: Optional[str] = None,
-            scale_by_seq_len: bool = True
+        self,
+        seq_len: Optional[int] = None,
+        pdb: Optional[str] = None,
+        scale_by_seq_len: bool = True,
     ):
         self.loss_dict = {}
         self.seq_len = seq_len
@@ -31,11 +31,11 @@ class ModelLoss:
         self.note = None
 
     def add_loss(
-            self,
-            loss: Tensor,
-            loss_weight: float = 1,
-            baseline: Union[Tensor, float] = 0,
-            loss_name: Optional[str] = None,
+        self,
+        loss: Tensor,
+        loss_weight: float = 1,
+        baseline: Union[Tensor, float] = 0,
+        loss_name: Optional[str] = None,
     ):
         """Add loss term"""
         loss_name = default(loss_name, f"loss_{len(self.loss_dict)}")
@@ -46,14 +46,16 @@ class ModelLoss:
             raw_loss=loss + tmp["raw_loss"],
             loss_val=loss * loss_weight + tmp["loss_val"],
             loss_weight=loss_weight + tmp["loss_weight"],
-            baseline=baseline + tmp["baseline"]
+            baseline=baseline + tmp["baseline"],
         )
 
     def merge_loss(self, other: ModelLoss) -> ModelLoss:
         """Merge other loss values with this loss"""
         for loss_name in self.loss_dict:
             if loss_name in other.loss_dict:
-                self.loss_dict[loss_name] = self.loss_dict[loss_name] + other.loss_dict[loss_name]
+                self.loss_dict[loss_name] = (
+                    self.loss_dict[loss_name] + other.loss_dict[loss_name]
+                )
             else:
                 self.loss_dict[loss_name] = other.loss_dict[loss_name]
         return self
@@ -61,9 +63,13 @@ class ModelLoss:
     @staticmethod
     def print_loss_val(name, baseline, actual, val):
         """Format and print values for loss"""
-        item = lambda x: np.round(x.detach().cpu().item() if torch.is_tensor(x) else x, 4)
-        print(f"[{name}] : baseline : {item(baseline)}, "
-              f"actual : {item(actual)}, loss_val : {item(val)}")
+        item = lambda x: np.round(
+            x.detach().cpu().item() if torch.is_tensor(x) else x, 4
+        )
+        print(
+            f"[{name}] : baseline : {item(baseline)}, "
+            f"actual : {item(actual)}, loss_val : {item(val)}"
+        )
 
     @property
     def non_zero_loss_names(self):
@@ -88,12 +94,18 @@ class ModelLoss:
     def get_loss(self) -> Tensor:
         """Gets weighted loss value for backprop"""
         scale = log2(default(self.seq_len, math.e)) if self.scale_by_seq_len else 1
-        return sum(filter(self._valid_loss, [scale * v for v in self.non_zero_loss_vals]))
+        return sum(
+            filter(self._valid_loss, [scale * v for v in self.non_zero_loss_vals])
+        )
 
     @property
     def float_value(self):
         """Get the (weighted) model loss as a float"""
-        return sum(v["loss_val"].detach().item() for v in self.loss_dict.values() if v["loss_weight"] != 0 and not torch.isnan(v["loss_val"]))
+        return sum(
+            v["loss_val"].detach().item()
+            for v in self.loss_dict.values()
+            if v["loss_weight"] != 0 and not torch.isnan(v["loss_val"])
+        )
 
     def delete_loss(self, name: str):
         """Delete loss by name"""
@@ -153,8 +165,10 @@ class ModelLoss:
         for name, vals in self.loss_dict.items():
             self.print_loss_val(
                 name,
-                *list(map(lambda x: vals[x], "baseline raw_loss loss_val".split()))
+                *list(map(lambda x: vals[x], "baseline raw_loss loss_val".split())),
             )
-        self.print_loss_val("total", 0, np.round(self.float_value, 4), np.round(self.float_value, 4))
+        self.print_loss_val(
+            "total", 0, np.round(self.float_value, 4), np.round(self.float_value, 4)
+        )
         if exists(self.note):
             print("[NOTE]", self.note)

@@ -1,7 +1,7 @@
 import gzip
 import os
 import pickle
-from functools import wraps, lru_cache
+from functools import lru_cache, wraps
 
 from filelock import FileLock
 
@@ -27,6 +27,7 @@ def cache(cache, key_fn):  # noqa
 
 # cache in directory
 
+
 def cache_dir(dirname, maxsize=128):
     """
     Cache a function with a directory
@@ -36,7 +37,6 @@ def cache_dir(dirname, maxsize=128):
     """
 
     def decorator(func):
-
         @lru_cache(maxsize=maxsize)
         @wraps(func)
         def wrapper(*args, **kwargs):

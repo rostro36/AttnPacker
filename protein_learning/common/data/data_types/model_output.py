@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, List, Union, Tuple, Any
+from typing import Any, List, Optional, Tuple, Union
 
 import torch
 from einops import rearrange  # noqa
@@ -12,8 +12,9 @@ from protein_learning.common.data.data_types.model_input import ModelInput
 from protein_learning.common.data.data_types.protein import Protein
 from protein_learning.common.helpers import default
 from protein_learning.protein_utils.align.kabsch_align import kabsch_align
-from protein_learning.protein_utils.sidechains.sidechain_utils import align_symmetric_sidechains
-
+from protein_learning.protein_utils.sidechains.sidechain_utils import (
+    align_symmetric_sidechains,
+)
 
 
 class ModelOutput:
@@ -57,7 +58,10 @@ class ModelOutput:
         """Mask indicating which residues are valid
         e.g. (atom coords defined for both native and decoy)
         """
-        return self.native_protein.valid_residue_mask & self.decoy_protein.valid_residue_mask
+        return (
+            self.native_protein.valid_residue_mask
+            & self.decoy_protein.valid_residue_mask
+        )
 
     @property
     def num_valid_residues(self) -> int:
@@ -68,10 +72,14 @@ class ModelOutput:
     @property
     def predicted_sc_coords(self) -> Tensor:
         """predicted side chain coordinates"""
-        pred, native = self.predicted_coords.squeeze(), self.native.atom_coords.squeeze()
+        pred, native = (
+            self.predicted_coords.squeeze(),
+            self.native.atom_coords.squeeze(),
+        )
         if pred.shape == native.shape:
             return self.native.get_atom_coords(
-                atom_tys=self.native.sc_atom_tys, coords=self.predicted_coords.squeeze(0)
+                atom_tys=self.native.sc_atom_tys,
+                coords=self.predicted_coords.squeeze(0),
             ).unsqueeze(0)
         elif self.predicted_coords.shape[-2] == len(self.native.sc_atom_tys):
             return self.predicted_coords
@@ -115,8 +123,12 @@ class ModelOutput:
             (3) coord mask (b,n,a)
         """
         pred_coords = self.predicted_coords
-        native_coords = self.get_atom_coords(native=True, atom_tys=atom_tys).unsqueeze(0)
-        pred_coords = self.get_atom_coords(decoy=True, atom_tys=atom_tys, coords=pred_coords)
+        native_coords = self.get_atom_coords(native=True, atom_tys=atom_tys).unsqueeze(
+            0
+        )
+        pred_coords = self.get_atom_coords(
+            decoy=True, atom_tys=atom_tys, coords=pred_coords
+        )
         native_mask = self.get_atom_mask(native=True, atom_tys=atom_tys).unsqueeze(0)
         pred_mask = self.get_atom_mask(decoy=True, atom_tys=atom_tys).unsqueeze(0)
         joint_mask = torch.logical_and(native_mask, pred_mask)
@@ -125,10 +137,15 @@ class ModelOutput:
         assert native_mask.shape == pred_coords.shape[:3]
         if align_by_kabsch:
             tmp, native_coords, mask = map(
-                lambda x: rearrange(x, "b n a ... -> b (n a) ..."), (pred_coords, native_coords, joint_mask)
+                lambda x: rearrange(x, "b n a ... -> b (n a) ..."),
+                (pred_coords, native_coords, joint_mask),
             )
-            _, native_coords = kabsch_align(align_to=tmp, align_from=native_coords, mask=mask)
-            native_coords = rearrange(native_coords, "b (n a) c -> b n a c", n=pred_coords.shape[1])
+            _, native_coords = kabsch_align(
+                align_to=tmp, align_from=native_coords, mask=mask
+            )
+            native_coords = rearrange(
+                native_coords, "b (n a) c -> b n a c", n=pred_coords.shape[1]
+            )
 
         return pred_coords, native_coords, joint_mask
 
@@ -140,7 +157,10 @@ class ModelOutput:
         native_coords = self.native_protein.atom_coords.unsqueeze(0)
         atom_mask = self.native_protein.atom_masks.unsqueeze(0)
         nat_aligned = align_symmetric_sidechains(
-            native_coords=native_coords, predicted_coords=self.predicted_coords, atom_mask=atom_mask, native_seq=native_seq
+            native_coords=native_coords,
+            predicted_coords=self.predicted_coords,
+            atom_mask=atom_mask,
+            native_seq=native_seq,
         )
         self.native_protein.atom_coords = nat_aligned.squeeze(0)
 
@@ -149,13 +169,16 @@ class ModelOutput:
         """Sequence length"""
         return len(self.native_protein.seq)
 
-    def detach(self)->ModelOutput:
+    def detach(self) -> ModelOutput:
         return ModelOutput(
             scalar_output=self.scalar_output.detach(),
             predicted_coords=self.predicted_coords.detach(),
-            pair_output= self.pair_output.detach(),
+            pair_output=self.pair_output.detach(),
             model_input=self.model_input,
-            extra={k : v.detach() if torch.is_tensor(v) else v for k,v in default(self.extra,dict()).items()},
+            extra={
+                k: v.detach() if torch.is_tensor(v) else v
+                for k, v in default(self.extra, dict()).items()
+            },
         )
 
     def __getattr__(self, attr):

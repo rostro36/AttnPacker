@@ -1,15 +1,16 @@
-import sys
 import os
+import sys
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["OPENBLAS_NUM_THREADS"] = "4"
 os.environ["MKL_NUM_THREADS"] = "4"
 os.environ["OMP_NUM_THREADS"] = "4"
 import subprocess
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-from multiprocessing import Pool
-import torch
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from functools import partial
+from multiprocessing import Pool
+
+import torch
 
 torch.set_printoptions(
     precision=3,
@@ -19,19 +20,20 @@ torch.set_printoptions(
     profile=None,
     sci_mode=False,
 )
-import numpy as np
-from protein_learning.protein_utils.sidechains.project_sidechains import (
-    project_onto_rotamers,
-    iterative_project_onto_rotamers,
-    default,
-)
-from typing import Optional, List, Union
-from protein_learning.common.data.data_types.protein import Protein
-import protein_learning.common.protein_constants as pc
-from protein_learning.common.data.datasets.utils import set_canonical_coords_n_masks
-import traceback
 import math
+import traceback
+from typing import List, Optional, Union
 
+import numpy as np
+
+import protein_learning.common.protein_constants as pc
+from protein_learning.common.data.data_types.protein import Protein
+from protein_learning.common.data.datasets.utils import set_canonical_coords_n_masks
+from protein_learning.protein_utils.sidechains.project_sidechains import (
+    default,
+    iterative_project_onto_rotamers,
+    project_onto_rotamers,
+)
 
 RESULT_ROOT = "/mnt/local/mmcpartlon/design_with_plv2/sidechain_packing/"
 
@@ -47,16 +49,22 @@ def standardize_pdbs_for_method(method, res_fldr):
         pdb_dir = os.path.join(RESULT_ROOT, method, "stats", res_fldr, "pdbs")
         return standardize_pdbs(pdb_dir)
     except:
-        os.makedirs(os.path.join(RESULT_ROOT, method, "stats", res_fldr, "pdbs"), exist_ok=True)
+        os.makedirs(
+            os.path.join(RESULT_ROOT, method, "stats", res_fldr, "pdbs"), exist_ok=True
+        )
         _pdb_dir = os.path.join(RESULT_ROOT, method, "stats", res_fldr)
-        tmp = [x for x in os.listdir(_pdb_dir) if "npy" not in x and x.startswith("fbb")][0]
+        tmp = [
+            x for x in os.listdir(_pdb_dir) if "npy" not in x and x.startswith("fbb")
+        ][0]
         subprocess.call(f"cp -r {os.path.join(_pdb_dir,tmp)} {pdb_dir}/", shell=True)
     return standardize_pdbs(pdb_dir)
 
 
 def standardize_pdbs(pdb_dir):
     ignore = ". native decoy project".split()
-    sub_folders = [x for x in os.listdir(pdb_dir) if not any([x.startswith(y) for y in ignore])]
+    sub_folders = [
+        x for x in os.listdir(pdb_dir) if not any([x.startswith(y) for y in ignore])
+    ]
     assert len(sub_folders) == 1, os.listdir(pdb_dir)
     native_names, decoy_names = [], []
     pdb_root = os.path.join(pdb_dir, sub_folders[0])
@@ -189,9 +197,15 @@ if __name__ == "__main__":
         default=2,
         type=int,
     )
-    parser.add_argument("--folders", help="folders to search in", default=None, nargs="+")
     parser.add_argument(
-        "--alphas", help="set only if using iterative projection scheme", type=float, default=[0], nargs="+"
+        "--folders", help="folders to search in", default=None, nargs="+"
+    )
+    parser.add_argument(
+        "--alphas",
+        help="set only if using iterative projection scheme",
+        type=float,
+        default=[0],
+        nargs="+",
     )
     parser.add_argument(
         "--torsion_loss_wt",
@@ -219,7 +233,9 @@ if __name__ == "__main__":
 
         print(f"pdb root: {pdb_root}", os.path.dirname(pdb_root))
         suff = str(round(args.steric_tol_frac * 100))
-        save_root = os.path.join(os.path.dirname(pdb_root), default(args.out_fldr, "projected" + suff))
+        save_root = os.path.join(
+            os.path.dirname(pdb_root), default(args.out_fldr, "projected" + suff)
+        )
 
         def fn(target):
             try:

@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import Tuple, Union, Optional, List, Any
+from typing import Any, List, Optional, Tuple, Union
 
 import torch
 import torch.utils.checkpoint as checkpoint
 from einops import rearrange  # noqa
-from torch import nn, Tensor, tensor, tensor_split  # noqa
+from torch import Tensor, nn, tensor, tensor_split  # noqa
+
 from protein_learning.networks.common.jit_scripts import Fuser
 
 """Helper Functions"""
@@ -57,7 +58,12 @@ def coords_to_rel_coords(coords: Tensor, other: Optional[Tensor] = None) -> Tens
     )  # noqa
 
 
-def masked_mean(x: Tensor, mask: Optional[Tensor], dim: Union[int, Tuple[int, ...]] = -1, keepdim=False) -> Tensor:
+def masked_mean(
+    x: Tensor,
+    mask: Optional[Tensor],
+    dim: Union[int, Tuple[int, ...]] = -1,
+    keepdim=False,
+) -> Tensor:
     """Performs a masked mean over a given dimension
     :param x: tensor to apply mean to
     :param mask: mask to use for calculating mean
@@ -99,7 +105,12 @@ class LearnedOuter(nn.Module):  # noqa
     """Learned Outer Product"""
 
     def __init__(
-        self, dim_in: int, dim_out: int, dim_hidden: int = 16, pre_norm: bool = True, do_checkpoint: bool = True
+        self,
+        dim_in: int,
+        dim_out: int,
+        dim_hidden: int = 16,
+        pre_norm: bool = True,
+        do_checkpoint: bool = True,
     ):
         super(LearnedOuter, self).__init__()
         self.pre_norm = nn.LayerNorm(dim_in) if pre_norm else nn.Identity()
@@ -149,7 +160,9 @@ class ReZero(nn.Module):  # noqa
 
     def forward(self, out, res):
         if out.shape != res.shape:
-            print(f"WARNING: rezero sizes don't match! out : {out.shape}, res : {res.shape}")
+            print(
+                f"WARNING: rezero sizes don't match! out : {out.shape}, res : {res.shape}"
+            )
             return out
         return self.res_fn(x=out, scale=self.alpha, bias=res)
 
@@ -210,7 +223,12 @@ class SplitLinear(nn.Module):  # noqa
     """Linear projection from one input to several outputs of varying sizes"""
 
     def __init__(
-        self, dim_in: int, dim_out: int, bias: bool = True, chunks: int = 1, sizes: Optional[List[int]] = None
+        self,
+        dim_in: int,
+        dim_out: int,
+        bias: bool = True,
+        chunks: int = 1,
+        sizes: Optional[List[int]] = None,
     ):
         super(SplitLinear, self).__init__()
         self.dim_in, self.dim_out = dim_in, dim_out
@@ -262,12 +280,16 @@ class Transition(nn.Module):  # noqa
         super().__init__()
         nonlin = default(nonlin, Fuser().GELU())
         dim_out = default(dim_out, dim_in)
-        glu = lambda: GLU(dim_in=dim_in, dim_out=mult * dim_in, nonlin=nonlin, bias=bias)
+        glu = lambda: GLU(
+            dim_in=dim_in, dim_out=mult * dim_in, nonlin=nonlin, bias=bias
+        )
         self.net = nn.Sequential(
             nn.LayerNorm(dim_in) if pre_norm else nn.Identity(),
             glu() if use_glu else nn.Linear(dim_in, mult * dim_in),
             nn.Identity() if use_glu else nonlin,
-            nn.LayerNorm(mult * dim_in, elementwise_affine=False) if mid_norm else nn.Identity(),
+            nn.LayerNorm(mult * dim_in, elementwise_affine=False)
+            if mid_norm
+            else nn.Identity(),
             nn.Linear(mult * dim_in, dim_out, bias=bias),
         )
         self.residual = default(residual, identity)

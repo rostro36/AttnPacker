@@ -1,8 +1,9 @@
 """Utility functions for working with protein sequences
 """
 import os
-from Bio import SeqIO # noqa
-from typing import Union, List
+from typing import List, Union
+
+from Bio import SeqIO  # noqa
 
 
 def load_fasta_file(seq_file, returnStr=True) -> Union[str, List]:
@@ -13,6 +14,6 @@ def load_fasta_file(seq_file, returnStr=True) -> Union[str, List]:
     :return: sequence as string or list.
     """
     if not os.path.isfile(seq_file) or not seq_file.endswith(".fasta"):
-        raise Exception('ERROR: an invalid sequence file: ', seq_file)
+        raise Exception("ERROR: an invalid sequence file: ", seq_file)
     record = SeqIO.read(seq_file, "fasta")
     return str(record.seq) if returnStr else record.seq

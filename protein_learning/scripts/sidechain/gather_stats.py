@@ -1,14 +1,14 @@
 import os
-import sys
 import subprocess
+import sys
 
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["OPENBLAS_NUM_THREADS"] = "4"
 os.environ["MKL_NUM_THREADS"] = "4"
 os.environ["OMP_NUM_THREADS"] = "4"
-import torch
 import numpy as np
+import torch
 
 torch.set_printoptions(
     precision=3,
@@ -18,40 +18,57 @@ torch.set_printoptions(
     profile=None,
     sci_mode=False,
 )
-from protein_learning.assessment.sidechain import assess_sidechains
-from protein_learning.common.helpers import masked_mean
-from protein_learning.protein_utils.sidechains.project_sidechains import (
-    project_onto_rotamers,
-    compute_sc_rmsd,
-    compute_clashes,
-)
-from protein_learning.protein_utils.sidechains.sidechain_utils import align_symmetric_sidechains, swap_symmetric_atoms
-from protein_learning.common.data.data_types.protein import Protein
-import torch
-import protein_learning.common.protein_constants as pc
-from protein_learning.common.data.datasets.utils import set_canonical_coords_n_masks
-from protein_learning.common.io.pdb_io import write_pdb
 import math
-from protein_learning.common.protein_constants import DISTAL_ATOM_MASK_TENSOR, AA_INDEX_MAP
-from protein_learning.assessment.metrics import compute_coord_lddt
-from multiprocessing import Pool
-from functools import partial
 from collections import defaultdict
+from functools import partial
+from multiprocessing import Pool
+
+import torch
+
+import protein_learning.common.protein_constants as pc
+from protein_learning.assessment.metrics import compute_coord_lddt
+from protein_learning.assessment.sidechain import assess_sidechains
+from protein_learning.common.data.data_types.protein import Protein
+from protein_learning.common.data.datasets.utils import set_canonical_coords_n_masks
+from protein_learning.common.helpers import masked_mean
+from protein_learning.common.io.pdb_io import write_pdb
+from protein_learning.common.protein_constants import (
+    AA_INDEX_MAP,
+    DISTAL_ATOM_MASK_TENSOR,
+)
+from protein_learning.protein_utils.sidechains.project_sidechains import (
+    compute_clashes,
+    compute_sc_rmsd,
+    project_onto_rotamers,
+)
+from protein_learning.protein_utils.sidechains.sidechain_utils import (
+    align_symmetric_sidechains,
+    swap_symmetric_atoms,
+)
 
 
 def calc_native_plddt(tgt_stats):
-    seq = torch.tensor([AA_INDEX_MAP[x] for x in tgt_stats["metadata"]["native_seq"]]).long()
+    seq = torch.tensor(
+        [AA_INDEX_MAP[x] for x in tgt_stats["metadata"]["native_seq"]]
+    ).long()
     mask = DISTAL_ATOM_MASK_TENSOR[seq]
-    pred, actual, c_mask = map(lambda x: tgt_stats["metadata"][x], "actual_coords decoy_coords coord_mask".split())
+    pred, actual, c_mask = map(
+        lambda x: tgt_stats["metadata"][x],
+        "actual_coords decoy_coords coord_mask".split(),
+    )
     pred, actual, c_mask = map(lambda x: torch.from_numpy(x), (pred, actual, c_mask))
     mask = c_mask & mask
     pred, actual = map(lambda x: x[mask].unsqueeze(0), (pred, actual))
-    return compute_coord_lddt(predicted_coords=pred, actual_coords=actual, per_residue=True)
+    return compute_coord_lddt(
+        predicted_coords=pred, actual_coords=actual, per_residue=True
+    )
 
 
 def masked_nsr_tgt(tgt_stats):
     nsr_stats = tgt_stats["nsr"]
-    mask, true_labels, pred_labels = [nsr_stats[x] for x in "seq_mask true_labels pred_labels".split()]
+    mask, true_labels, pred_labels = [
+        nsr_stats[x] for x in "seq_mask true_labels pred_labels".split()
+    ]
     true_labels, pred_labels = map(lambda x: x[mask], (true_labels, pred_labels))
     return np.sum(true_labels == pred_labels) / len(pred_labels)
 
@@ -102,7 +119,9 @@ def get_method_stats_fn(pdb_dir, targets, native_dir, overwrite=False):
                 # print(f"        no path for decoy {decoy_pdb}")
                 continue
             method_stats[target] = assess_sidechains(
-                target_pdb_path=native_pdb, decoy_pdb_path=decoy_pdb, steric_tol_allowance=0.01
+                target_pdb_path=native_pdb,
+                decoy_pdb_path=decoy_pdb,
+                steric_tol_allowance=0.01,
             )
         except Exception as e:
             print("#################################")
@@ -113,7 +132,9 @@ def get_method_stats_fn(pdb_dir, targets, native_dir, overwrite=False):
 
 def get_stats_for_tgt(assess_stats):
     angle_diffs = torch.abs(assess_stats["dihedral"]["mae"] * (180 / math.pi))
-    mean_mae = masked_mean(torch.abs(angle_diffs), assess_stats["dihedral"]["mask"], dim=0)
+    mean_mae = masked_mean(
+        torch.abs(angle_diffs), assess_stats["dihedral"]["mask"], dim=0
+    )
     has_chi_mask = torch.any(assess_stats["dihedral"]["mask"], dim=-1)
     all_lt_20 = torch.sum(angle_diffs < 20, dim=-1) == 4
     mae_sr = (torch.sum(all_lt_20[has_chi_mask]) / has_chi_mask[has_chi_mask].numel(),)
@@ -176,7 +197,9 @@ def get_all_pdb_folders(root, methods):
 
 def get_stats_for_tgt(assess_stats):
     angle_diffs = torch.abs(assess_stats["dihedral"]["mae"] * (180 / torch.pi))
-    mean_mae = masked_mean(torch.abs(angle_diffs), assess_stats["dihedral"]["mask"], dim=0)
+    mean_mae = masked_mean(
+        torch.abs(angle_diffs), assess_stats["dihedral"]["mask"], dim=0
+    )
     has_chi_mask = torch.any(assess_stats["dihedral"]["mask"], dim=-1)
     all_lt_20 = torch.sum(angle_diffs < 20, dim=-1) == 4
     mae_sr = (torch.sum(all_lt_20[has_chi_mask]) / has_chi_mask[has_chi_mask].numel(),)
@@ -184,7 +207,9 @@ def get_stats_for_tgt(assess_stats):
     dihedral_counts = torch.sum(assess_stats["dihedral"]["mask"], dim=0)
     clash_info = {}
     for tol in assess_stats["clash-info"]:
-        clash_info[f"num_clashes_{tol}"] = assess_stats["clash-info"][tol]["steric"]["num_clashes"]
+        clash_info[f"num_clashes_{tol}"] = assess_stats["clash-info"][tol]["steric"][
+            "num_clashes"
+        ]
 
     return dict(
         mean_mae=mean_mae,
@@ -224,7 +249,9 @@ def get_per_res_stats_for_target(assess_stats, surface=False, core=False):
     )
 
 
-def get_per_res_csv_row(pdb_fldr, method, benchmark, targets, min_len=2, ca_rmsd_thresh=2.5):
+def get_per_res_csv_row(
+    pdb_fldr, method, benchmark, targets, min_len=2, ca_rmsd_thresh=2.5
+):
     stats_path = os.path.join(pdb_fldr, "stats.npy")
     assert os.path.exists(stats_path), f"{stats_path}"
     _method_stats, method_stats = np.load(stats_path, allow_pickle=True).item(), dict()
@@ -247,7 +274,15 @@ def get_per_res_csv_row(pdb_fldr, method, benchmark, targets, min_len=2, ca_rmsd
                 tmp[k][res_idx].append(method_stats[tgt][k][res_idx])
 
     # average over all values
-    header = ["method", "bm", "eval_ty", "N"] + ["rmsd", "surface", "core", "chi_1", "chi_2", "chi_3", "chi_4"]
+    header = ["method", "bm", "eval_ty", "N"] + [
+        "rmsd",
+        "surface",
+        "core",
+        "chi_1",
+        "chi_2",
+        "chi_3",
+        "chi_4",
+    ]
     rows = []
     for k in stat_keys:
         row = [
@@ -283,13 +318,23 @@ def get_csv_row(pdb_fldr, method, benchmark, targets, min_len=2, ca_rmsd_thresh=
 
     total_resi = sum([x for x in tmp["res_len"]])
     total_dihedrals = torch.sum(torch.stack(tmp["dihedral_counts"], dim=0), dim=0)
-    total_mae = torch.sum(torch.stack([x * y for x, y in zip(tmp["mean_mae"], tmp["dihedral_counts"])], dim=0), dim=0)
+    total_mae = torch.sum(
+        torch.stack(
+            [x * y for x, y in zip(tmp["mean_mae"], tmp["dihedral_counts"])], dim=0
+        ),
+        dim=0,
+    )
     row = {}
-    row["mae_sr"] = sum([x[0].item() * r for x, r in zip(tmp["mae_sr"], tmp["res_len"])]) / total_resi
+    row["mae_sr"] = (
+        sum([x[0].item() * r for x, r in zip(tmp["mae_sr"], tmp["res_len"])])
+        / total_resi
+    )
     mae = total_mae / total_dihedrals
     for i in range(4):
         row[f"chi_{i+1}_mae"] = mae[i].item()
-    row["rmsd"] = sum([x.item() * y for x, y in zip(tmp["rmsd"], tmp["res_len"])]) / total_resi
+    row["rmsd"] = (
+        sum([x.item() * y for x, y in zip(tmp["rmsd"], tmp["res_len"])]) / total_resi
+    )
     for k in steric_ks:
         for q in (0.5, 0.75):
             row[k + f"_q_{round(100*q)}"] = np.quantile(tmp[k], q=q)
@@ -316,10 +361,18 @@ def fix_pdb_names(fldr):
 
 if __name__ == "__main__":
     RESULT_ROOT = "/mnt/local/mmcpartlon/sidechain_packing/standard_results/"
-    methods = [x for x in os.listdir(RESULT_ROOT) if not x.startswith(".") and "npy" not in x]
-    TARGETS = [x[:-4] for x in os.listdir(os.path.join(RESULT_ROOT, "native", "casp_all")) if x.endswith("pdb")]
+    methods = [
+        x for x in os.listdir(RESULT_ROOT) if not x.startswith(".") and "npy" not in x
+    ]
+    TARGETS = [
+        x[:-4]
+        for x in os.listdir(os.path.join(RESULT_ROOT, "native", "casp_all"))
+        if x.endswith("pdb")
+    ]
     NATIVE_DIR = os.path.join(RESULT_ROOT, "native", "casp_all")
-    fn = partial(get_method_stats_fn, targets=TARGETS, native_dir=NATIVE_DIR, overwrite=False)
+    fn = partial(
+        get_method_stats_fn, targets=TARGETS, native_dir=NATIVE_DIR, overwrite=False
+    )
     sf = partial(safe_fn, fn=fn, ret={})
     print("Gathering results for:")
     for m in methods:

@@ -7,7 +7,7 @@ from torch import nn
 
 from protein_learning.networks.common.utils import default
 
-FiberEl = namedtuple('FiberEl', ['degrees', 'dim'])
+FiberEl = namedtuple("FiberEl", ["degrees", "dim"])
 
 
 def uniq(arr):
@@ -32,10 +32,7 @@ class Fiber(nn.Module):
 
     DEGREE, DIM = 0, 1
 
-    def __init__(
-            self,
-            structure
-    ):
+    def __init__(self, structure):
         super().__init__()
         if isinstance(structure, dict):
             structure = list(structure.items())
@@ -66,23 +63,24 @@ class Fiber(nn.Module):
     @staticmethod
     def create(num_degrees, dim):
         dim_tuple = dim if isinstance(dim, tuple) else ((dim,) * num_degrees)
-        return Fiber([FiberEl(degree, dim) for degree, dim in zip(range(num_degrees), dim_tuple)])
+        return Fiber(
+            [FiberEl(degree, dim) for degree, dim in zip(range(num_degrees), dim_tuple)]
+        )
 
     def scale(self, mult: int):
         return Fiber([(deg, dim * mult) for deg, dim in self.items])
 
     def __getitem__(self, degree):
-        """Returns the dimension corresponding to degree
-        """
+        """Returns the dimension corresponding to degree"""
         return dict(self.structure)[degree]
 
     def __iter__(self):
         return iter(self.structure)
 
-    def __mul__(self, other: 'Fiber'):
+    def __mul__(self, other: "Fiber"):
         return product(self.structure, other.structure)
 
-    def __and__(self, other: 'Fiber'):
+    def __and__(self, other: "Fiber"):
         out = []
         for degree, dim in self:
             if degree in other.degrees:
@@ -115,8 +113,7 @@ class Fiber(nn.Module):
 
 
 def default_degree_map(fiber_from: Fiber, fiber_to: Fiber) -> torch.Tensor:
-    """Returns a degree mapping between all pairs of input and output degrees
-    """
+    """Returns a degree mapping between all pairs of input and output degrees"""
     d1, d2 = max(fiber_from.degrees), max(fiber_to.degrees)
     return torch.ones((d1, d2)).bool()
 
@@ -140,7 +137,9 @@ def filter_fiber_product(fiber_from: Fiber, fiber_to: Fiber, degree_map=None):
 
     dmat = default(degree_map, default_degree_map(fiber_from, fiber_to))
     key = fiber_to.DEGREE
-    return filter(lambda x, _dmat=dmat: _dmat[x[0][key], x[1][key]], fiber_from * fiber_to)
+    return filter(
+        lambda x, _dmat=dmat: _dmat[x[0][key], x[1][key]], fiber_from * fiber_to
+    )
 
 
 def default_tymap(fiber_in: Fiber, fiber_out: Fiber):
@@ -148,7 +147,9 @@ def default_tymap(fiber_in: Fiber, fiber_out: Fiber):
 
 
 # main class
-def cast_fiber(dims: Union[int, Tuple, Fiber, Dict], degrees: int = 1) -> Union[Fiber, None]:
+def cast_fiber(
+    dims: Union[int, Tuple, Fiber, Dict], degrees: int = 1
+) -> Union[Fiber, None]:
     if dims is None:
         return None
     if isinstance(dims, int):

@@ -1,35 +1,37 @@
 """Invariant Point Network Config"""
-from typing import Optional
-from protein_learning.networks.config.net_config import NetConfig
-from typing import Union, Tuple, List
-from protein_learning.networks.common.attention_utils import SimilarityType
+from typing import List, Optional, Tuple, Union
+
 from protein_learning.common.helpers import default, exists
+from protein_learning.networks.common.attention_utils import SimilarityType
+from protein_learning.networks.config.net_config import NetConfig
 
 
 class IPNConfig(NetConfig):
     """Invariant Point Network Config"""
 
     def __init__(
-            self,
-            scalar_dim_in: int,
-            pair_dim: Optional[int],
-            coord_dim_out: Optional[int] = 4,
-            heads: int = 8,
-            scalar_kv_dims: Union[List[int], Tuple[int, int], int] = 16,
-            point_kv_dims: Union[List[int], Tuple[int, int], int] = 4,
-            depth: int = 1,
-            dropout: float = 0,
-            ff_mult: float = 4,
-            num_ff_layers: int = 2,
-            use_pairwise_kernel: bool = False,
-            use_dist_sim: bool = True,
-            use_rigids: bool = True,
-            update_edges: bool = True,
-            augment_edges: bool = True,
-            use_pair_bias: bool = True,
+        self,
+        scalar_dim_in: int,
+        pair_dim: Optional[int],
+        coord_dim_out: Optional[int] = 4,
+        heads: int = 8,
+        scalar_kv_dims: Union[List[int], Tuple[int, int], int] = 16,
+        point_kv_dims: Union[List[int], Tuple[int, int], int] = 4,
+        depth: int = 1,
+        dropout: float = 0,
+        ff_mult: float = 4,
+        num_ff_layers: int = 2,
+        use_pairwise_kernel: bool = False,
+        use_dist_sim: bool = True,
+        use_rigids: bool = True,
+        update_edges: bool = True,
+        augment_edges: bool = True,
+        use_pair_bias: bool = True,
     ):
         super(IPNConfig, self).__init__()
-        to_dims = lambda x: x if (isinstance(x, list) or isinstance(x, tuple)) else [x] * 2
+        to_dims = (
+            lambda x: x if (isinstance(x, list) or isinstance(x, tuple)) else [x] * 2
+        )
         scalar_kv_dims, point_kv_dims = map(to_dims, (scalar_kv_dims, point_kv_dims))
         self.scalar_kv_dims, self.point_kv_dims = scalar_kv_dims, point_kv_dims
         self.scalar_dim_in = scalar_dim_in
@@ -45,7 +47,9 @@ class IPNConfig(NetConfig):
         self.use_rigids = use_rigids
         self.update_edges = update_edges
         self.augment_edges = augment_edges
-        self.sim_ty = SimilarityType.DISTANCE if self.use_dist_sim else SimilarityType.DOT_PROD
+        self.sim_ty = (
+            SimilarityType.DISTANCE if self.use_dist_sim else SimilarityType.DOT_PROD
+        )
         self.use_pair_bias = use_pair_bias
 
     @property

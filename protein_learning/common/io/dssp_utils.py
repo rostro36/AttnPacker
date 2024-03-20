@@ -8,11 +8,18 @@ from torch import Tensor
 
 from protein_learning.common.global_constants import get_logger
 from protein_learning.common.helpers import default
-from protein_learning.common.io.pdb_utils import map_seq_to_pdb, get_structure
+from protein_learning.common.io.pdb_utils import get_structure, map_seq_to_pdb
 
 logger = get_logger(__name__)
 
-SS_REPLACE_KEYS = [('-', 'C'), ('I', 'C'), ('T', 'C'), ('S', 'C'), ('G', 'H'), ('B', 'E')]
+SS_REPLACE_KEYS = [
+    ("-", "C"),
+    ("I", "C"),
+    ("T", "C"),
+    ("S", "C"),
+    ("G", "H"),
+    ("B", "E"),
+]
 SS_KEY_MAP = {"C": 0, "H": 1, "E": 2}
 
 
@@ -24,10 +31,7 @@ def get_dssp(pdbfile: str, name: str = None) -> Bio.PDB.DSSP:
     return dssp
 
 
-def get_aligned_dssp_keys(
-        pdbfile,
-        seq: str
-) -> List[Tuple]:
+def get_aligned_dssp_keys(pdbfile, seq: str) -> List[Tuple]:
     _, residue_list, *_ = map_seq_to_pdb(sequence=seq, pdbfile=pdbfile)
     return [res.get_full_id()[-2:] for res in residue_list]
 
@@ -38,7 +42,9 @@ def to_ss3(sec_structure):
     return sec_structure
 
 
-def get_ss_from_pdb_and_seq(pdbfile: str, seq: str, return_loop_on_error: bool= True) -> str:
+def get_ss_from_pdb_and_seq(
+    pdbfile: str, seq: str, return_loop_on_error: bool = True
+) -> str:
 
     try:
         dssp = get_dssp(pdbfile=pdbfile)
@@ -51,18 +57,20 @@ def get_ss_from_pdb_and_seq(pdbfile: str, seq: str, return_loop_on_error: bool= 
                 n_missed += 1
                 sec_structure += "C"
         if n_missed > max(10, int(len(seq) * 0.1)):
-            raise Exception(f"missed {n_missed}/{len(seq)} residues loading sec. structure")
+            raise Exception(
+                f"missed {n_missed}/{len(seq)} residues loading sec. structure"
+            )
         return to_ss3(sec_structure)
 
     except Exception as e:
-        #act_set, exp_set = set(dssp.keys()), set(dssp_keys)
-        #print("[ERROR]: got error {e} loading secondary structure")
-        #print(f"actual/expected key set lens : {len(act_set)}/{len(act_set)}")
-        #print(f"elements in act not in exp : {act_set - exp_set}")
-        #print(f"elements in exp not in act : {exp_set - act_set}")
+        # act_set, exp_set = set(dssp.keys()), set(dssp_keys)
+        # print("[ERROR]: got error {e} loading secondary structure")
+        # print(f"actual/expected key set lens : {len(act_set)}/{len(act_set)}")
+        # print(f"elements in act not in exp : {act_set - exp_set}")
+        # print(f"elements in exp not in act : {exp_set - act_set}")
         if not return_loop_on_error:
             raise e
-        return "".join(["C"]*len(seq))
+        return "".join(["C"] * len(seq))
 
 
 def encode_sec_structure(sec_structure: str) -> Tensor:

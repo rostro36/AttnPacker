@@ -2,50 +2,54 @@
 import os
 
 # make sure cuda devices are listed according to PCI_BUS_ID before any torch modules are loaded
-from typing import Union, Optional, Callable, Tuple, List
+from typing import Callable, List, Optional, Tuple, Union
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["OPENBLAS_NUM_THREADS"] = "4"
 os.environ["MKL_NUM_THREADS"] = "4"
 os.environ["OMP_NUM_THREADS"] = "4"
+import gc
 import sys
 from abc import abstractmethod
-import gc
-import torch
-from protein_learning.features.input_embedding import InputEmbedding
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-from protein_learning.features.feature_config import InputFeatureConfig
-from protein_learning.features.feature_generator import FeatureGenerator
-
-# from protein_learning.training.trainer import Trainer
-from protein_learning.common.global_constants import get_logger, _set_jit_fusion_options  # noqa
-from protein_learning.models.utils.model_io import (
-    load_n_save_args,
-    print_args,
-    get_args_n_groups,
-    load_args_for_eval,
-)
-from protein_learning.models.utils.opt_parse import (
-    add_default_loss_options,
-    add_inter_chain_mask_options,
-    add_intra_chain_mask_options,
-    add_chain_partition_options,
-    add_feature_options,
-    add_feat_gen_options,
-    add_stats_options,
-)
-
-from protein_learning.features.default_feature_generator import DefaultFeatureGenerator
-from protein_learning.common.data.datasets.protein_dataset import ProteinDataset
-from protein_learning.common.global_config import GlobalConfig
-from protein_learning.common.helpers import exists, default
-from protein_learning.models.model_abc.protein_model import ProteinModel
-
-# from protein_learning.assessment.model_eval.model_evaluator import ModelEvaluator, StatsConfig
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
 # from protein_learning.assessment.model_eval.genetic_alg.ga_evaluator import GAEvaluator
 # from protein_learning.assessment.model_eval.genetic_alg.utils import add_ga_args
 import numpy as np
+import torch
+
+from protein_learning.common.data.datasets.protein_dataset import ProteinDataset
+from protein_learning.common.global_config import GlobalConfig
+
+# from protein_learning.training.trainer import Trainer
+from protein_learning.common.global_constants import (  # noqa
+    _set_jit_fusion_options,
+    get_logger,
+)
+from protein_learning.common.helpers import default, exists
+from protein_learning.features.default_feature_generator import DefaultFeatureGenerator
+from protein_learning.features.feature_config import InputFeatureConfig
+from protein_learning.features.feature_generator import FeatureGenerator
+from protein_learning.features.input_embedding import InputEmbedding
+from protein_learning.models.model_abc.protein_model import ProteinModel
+from protein_learning.models.utils.model_io import (
+    get_args_n_groups,
+    load_args_for_eval,
+    load_n_save_args,
+    print_args,
+)
+from protein_learning.models.utils.opt_parse import (
+    add_chain_partition_options,
+    add_default_loss_options,
+    add_feat_gen_options,
+    add_feature_options,
+    add_inter_chain_mask_options,
+    add_intra_chain_mask_options,
+    add_stats_options,
+)
+
+# from protein_learning.assessment.model_eval.model_evaluator import ModelEvaluator, StatsConfig
+
 
 # _set_jit_fusion_options()
 torch.set_printoptions(precision=3)
@@ -158,10 +162,16 @@ def add_feat_gen_groups(parser):
     # masked feature generation
     parser, feat_gen_args = add_feat_gen_options(parser)  # feat_gen_args
     # add masking options
-    parser, intra_chain_mask_group = add_intra_chain_mask_options(parser)  # intra_chain_mask_args
-    parser, inter_chain_mask_group = add_inter_chain_mask_options(parser)  # inter_chain_mask_args
+    parser, intra_chain_mask_group = add_intra_chain_mask_options(
+        parser
+    )  # intra_chain_mask_args
+    parser, inter_chain_mask_group = add_inter_chain_mask_options(
+        parser
+    )  # inter_chain_mask_args
     # add chain partition options
-    parser, partition_group = add_chain_partition_options(parser)  # chain_partition_args
+    parser, partition_group = add_chain_partition_options(
+        parser
+    )  # chain_partition_args
     return parser
 
 
@@ -184,15 +194,23 @@ def get_default_parser():
 
 def get_default_parser_for_eval():
     """Get arguments for complex design"""
-    parser = ArgumentParser(description="", epilog="", formatter_class=ArgumentDefaultsHelpFormatter)  # noqa
+    parser = ArgumentParser(
+        description="", epilog="", formatter_class=ArgumentDefaultsHelpFormatter
+    )  # noqa
 
     # Complex-Design-Specific arguments
     parser.add_argument("--raise_exceptions", action="store_true")
     parser.add_argument("--model_config_path", type=str)
     parser.add_argument("--global_config_path", type=str)
-    parser.add_argument("--stats_dir", help="directory to store model stats in", default=None)
-    parser.add_argument("--pdb_dir", help="directory to store pdbs in (optional)", default=None)
-    parser.add_argument("--gpu_indices", help="gpu index to run on", type=str, nargs="+", default=["0"])
+    parser.add_argument(
+        "--stats_dir", help="directory to store model stats in", default=None
+    )
+    parser.add_argument(
+        "--pdb_dir", help="directory to store pdbs in (optional)", default=None
+    )
+    parser.add_argument(
+        "--gpu_indices", help="gpu index to run on", type=str, nargs="+", default=["0"]
+    )
     parser.add_argument("--eval_decoy_folder")
     parser.add_argument("--eval_native_folder")
     parser.add_argument("--eval_target_list")
@@ -374,10 +392,14 @@ class TrainABC:
         )
         self.feature_config = feature_config  # noqa
 
-        feat_gen = get_feature_gen(arg_groups, feature_config, apply_masks=self.apply_masks)
+        feat_gen = get_feature_gen(
+            arg_groups, feature_config, apply_masks=self.apply_masks
+        )
         self.feat_gen = feat_gen  # noqa
         fgs = [feat_gen] * 3
-        val_feat_gen = self.get_val_feat_gen(arg_groups, feature_config, apply_masks=self.apply_masks)
+        val_feat_gen = self.get_val_feat_gen(
+            arg_groups, feature_config, apply_masks=self.apply_masks
+        )
         if exists(val_feat_gen):
             fgs = [feat_gen, val_feat_gen, val_feat_gen]
 

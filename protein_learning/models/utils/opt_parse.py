@@ -4,6 +4,7 @@ from protein_learning.common.helpers import default, exists
 
 namespace_2_dict = lambda x: vars(x) if isinstance(x, Namespace) else x
 
+
 def add_esm_options(parser):
     esm_args = parser.add_argument_group("esm_args")
     esm_args.add_argument("--use_esm_prob", type=float, default=1)
@@ -15,23 +16,39 @@ def add_esm_options(parser):
     esm_args.add_argument("--max_msa_seqs", type=int, default=128)
     return parser, esm_args
 
+
 def add_default_loss_options(parser):
     # Loss options
     loss_options = parser.add_argument_group("loss_args")
 
     # PER-LOSS WEIGHTS
-    loss_tys = "fape plddt nsr tm dist_inv pair_dist com pae violation sc_rmsd res_fape".split(" ")
+    loss_tys = (
+        "fape plddt nsr tm dist_inv pair_dist com pae violation sc_rmsd res_fape".split(
+            " "
+        )
+    )
     for loss_ty in loss_tys:
-        loss_options.add_argument(f"--{loss_ty}_wt", help=f"weight for {loss_ty} loss", default=None, type=float)
+        loss_options.add_argument(
+            f"--{loss_ty}_wt",
+            help=f"weight for {loss_ty} loss",
+            default=None,
+            type=float,
+        )
     loss_options.add_argument(
-        f"--inter_fape_scale", help=f"weight to scale intra fape loss by", default=None, type=float
+        f"--inter_fape_scale",
+        help=f"weight to scale intra fape loss by",
+        default=None,
+        type=float,
     )
 
     # PER-LOSS ATOM TYPES
     loss_tys = "fape plddt tm dist_inv pair_dist pae".split(" ")
     for loss_ty in loss_tys:
         loss_options.add_argument(
-            f"--{loss_ty}_atom_tys", help=f"atom types for {loss_ty} loss", default=None, nargs="+"
+            f"--{loss_ty}_atom_tys",
+            help=f"atom types for {loss_ty} loss",
+            default=None,
+            nargs="+",
         )
 
     # PER-LOSS DISCRETIZATION
@@ -46,7 +63,7 @@ def add_default_loss_options(parser):
     loss_options.add_argument("--bond_angle_wt", type=float, default=3)
     loss_options.add_argument("--viol_schedule", type=float, nargs="+", default=None)
     loss_options.add_argument("--mask_rel_wt", type=float, default=1)
-    loss_options.add_argument("--sc_rmsd_p",type=int,default=1)
+    loss_options.add_argument("--sc_rmsd_p", type=int, default=1)
     for name in "pae plddt nsr".split():
         loss_options.add_argument(f"--include_{name}_after", default=0, type=int)
 
@@ -61,7 +78,12 @@ def add_intra_chain_mask_options(parser):
     mask_tys += "interface_full true_interface true_inverse_interface".split()
     mask_tys += "interface inverse_interface inverse_interface_full".split()
     for mask_ty in mask_tys:
-        mask_options.add_argument(f"--{mask_ty}_mask_weight", help=f"weight for {mask_ty} mask", default=0, type=float)
+        mask_options.add_argument(
+            f"--{mask_ty}_mask_weight",
+            help=f"weight for {mask_ty} mask",
+            default=0,
+            type=float,
+        )
     # spatial mask
     mask_options.add_argument("--spatial_mask_top_k", type=int, default=30)
     mask_options.add_argument("--spatial_mask_max_radius", type=float, default=12.0)
@@ -77,8 +99,12 @@ def add_intra_chain_mask_options(parser):
     # interface masking
     mask_options.add_argument("--interface_mask_min_frac", type=float, default=0)
     mask_options.add_argument("--interface_mask_max_frac", type=float, default=0)
-    mask_options.add_argument("--inverse_interface_mask_min_frac", type=float, default=0)
-    mask_options.add_argument("--inverse_interface_mask_max_frac", type=float, default=0)
+    mask_options.add_argument(
+        "--inverse_interface_mask_min_frac", type=float, default=0
+    )
+    mask_options.add_argument(
+        "--inverse_interface_mask_max_frac", type=float, default=0
+    )
 
     return parser, mask_options
 
@@ -90,7 +116,10 @@ def add_inter_chain_mask_options(parser):
     mask_tys = "random one_to_all full no".split(" ")
     for mask_ty in mask_tys:
         mask_options.add_argument(
-            f"--inter_{mask_ty}_mask_weight", help=f"weight for {mask_ty} mask", default=0, type=float
+            f"--inter_{mask_ty}_mask_weight",
+            help=f"weight for {mask_ty} mask",
+            default=0,
+            type=float,
         )
     return parser, mask_options
 
@@ -106,7 +135,9 @@ def add_chain_partition_options(parser):
             default=0,
             type=float,
         )
-    partition_options.add_argument("--linear_n_classes", nargs="+", default=[2, 2], type=int)
+    partition_options.add_argument(
+        "--linear_n_classes", nargs="+", default=[2, 2], type=int
+    )
     partition_options.add_argument("--partition_min_frac", type=float, default=0)
     partition_options.add_argument("--partition_min_len", type=int, default=10)
     partition_options.add_argument("--bilinear_max_len", type=int, default=50)
@@ -119,7 +150,9 @@ def add_feature_options(parser):
     feature_options = parser.add_argument_group("feature_args")
     feature_options.add_argument("--embed_sec_struct", action="store_true")
     feature_options.add_argument("--sec_struct_embed_dim", type=int, default=0)
-    feature_options.add_argument("--joint_embed_res_pair_rel_sep_embed_dim", default=48, type=int)
+    feature_options.add_argument(
+        "--joint_embed_res_pair_rel_sep_embed_dim", default=48, type=int
+    )
 
     ty_opts = (
         "quat_encode_rel_ori encode_local_rel_coords "
@@ -131,7 +164,9 @@ def add_feature_options(parser):
         feature_options.add_argument(f"--{opt}", action="store_true")
 
     # types that can be embedded or one-hot encoded
-    tys = "res_rel_pos res_ty bb_dihedral rel_sep centrality rel_dist tr_rosetta_ori".split(" ")
+    tys = "res_rel_pos res_ty bb_dihedral rel_sep centrality rel_dist tr_rosetta_ori".split(
+        " "
+    )
     for ty in tys:
         feature_options.add_argument(f"--embed_{ty}", action="store_true")
         feature_options.add_argument(f"--one_hot_{ty}", action="store_true")
@@ -139,15 +174,27 @@ def add_feature_options(parser):
         if ty not in "res_ty rel_sep".split():
             feature_options.add_argument(f"--{ty}_encode_dim", type=int, default=-1)
 
-    feature_options.add_argument("--rel_dist_bounds", nargs="+", type=float, default=[2.5, 16.5])
-    feature_options.add_argument("--rel_dist_atom_tys", nargs="+", default="CA CA N CA".split())
+    feature_options.add_argument(
+        "--rel_dist_bounds", nargs="+", type=float, default=[2.5, 16.5]
+    )
+    feature_options.add_argument(
+        "--rel_dist_atom_tys", nargs="+", default="CA CA N CA".split()
+    )
     feature_options.add_argument("--res_ty_corrupt_prob", default=0, type=float)
-    feature_options.add_argument("--sc_dihedral_noise", default=[0,0], type=float, nargs="+")
+    feature_options.add_argument(
+        "--sc_dihedral_noise", default=[0, 0], type=float, nargs="+"
+    )
     # feature_options.add_argument("--coord_noise", default=0, type=float)
     return parser, feature_options
 
 
-def add_transformer_options(parser, name=None, suffix=None, include_pair: bool = True, include_coord: bool = True):
+def add_transformer_options(
+    parser,
+    name=None,
+    suffix=None,
+    include_pair: bool = True,
+    include_coord: bool = True,
+):
     name = default(name, "transformer_args")
     suffix = f"{suffix}_" if exists(suffix) else ""
     transformer_options = parser.add_argument_group(name)
@@ -156,9 +203,13 @@ def add_transformer_options(parser, name=None, suffix=None, include_pair: bool =
     transformer_options.add_argument(f"--{suffix}scalar_head_dim", default=16, type=int)
     if include_pair:
         transformer_options.add_argument(f"--{suffix}pair_heads", default=4, type=int)
-        transformer_options.add_argument(f"--{suffix}pair_head_dim", default=20, type=int)
+        transformer_options.add_argument(
+            f"--{suffix}pair_head_dim", default=20, type=int
+        )
     if include_coord:
-        transformer_options.add_argument(f"--{suffix}coord_head_dim", default=16, type=int)
+        transformer_options.add_argument(
+            f"--{suffix}coord_head_dim", default=16, type=int
+        )
     return parser, transformer_options
 
 
@@ -205,8 +256,8 @@ def add_tfn_options(parser):
     # group.add_argument(name='--linear_proj_keys', type=bool, default=False)
     group.add_argument("--hidden_mult", type=int, default=2)
     group.add_argument("--radial_mult", type=float, default=2)
-    #TODO: may want to double check
-    
+    # TODO: may want to double check
+
     group.add_argument("--attn_ty", type=str, default="tfn")
     group.add_argument("--use_coord_layernorm", action="store_true")
     return parser, group
@@ -216,7 +267,11 @@ def add_stats_options(parser):
     stats_group = parser.add_argument_group("stats_args")
     tys = "nsr lddt violation rmsd contact mae distance".split()
     for ty in tys:
-        stats_group.add_argument(f"--get_{ty}_stats", action="store_true", help=f"get statistics for {ty} data")
+        stats_group.add_argument(
+            f"--get_{ty}_stats",
+            action="store_true",
+            help=f"get statistics for {ty} data",
+        )
     return parser, stats_group
 
 

@@ -1,9 +1,9 @@
+from functools import lru_cache, reduce
 from math import pi, sqrt
-from functools import reduce
 from operator import mul
+
 import torch
 
-from functools import lru_cache
 from protein_learning.networks.tfn.repr.cache_utils import cache
 
 # constants
@@ -21,9 +21,10 @@ def lpmv_cache_key_fn(l, m, x):  # noqa
 
 # spherical harmonics
 
+
 @lru_cache(maxsize=1000)
 def semifactorial(x):
-    return reduce(mul, range(x, 1, -2), 1.)
+    return reduce(mul, range(x, 1, -2), 1.0)
 
 
 @lru_cache(maxsize=1000)
@@ -33,7 +34,7 @@ def pochhammer(x, k):
 
 def negative_lpmv(l, m, y):  # noqa
     if m < 0:
-        y *= ((-1) ** m / pochhammer(l + m + 1, -2 * m))
+        y *= (-1) ** m / pochhammer(l + m + 1, -2 * m)
     return y
 
 
@@ -108,13 +109,13 @@ def get_spherical_harmonics_element(l, m, theta, phi):  # noqa
         Y = torch.sin(m_abs * phi)
 
     Y *= leg
-    N *= sqrt(2. / pochhammer(l - m_abs + 1, 2 * m_abs))
+    N *= sqrt(2.0 / pochhammer(l - m_abs + 1, 2 * m_abs))
     Y *= N
     return Y
 
 
 def get_spherical_harmonics(l, theta, phi):  # noqa
-    """ Tesseral harmonic with Condon-Shortley phase.
+    """Tesseral harmonic with Condon-Shortley phase.
 
     The Tesseral spherical harmonics are also known as the real spherical
     harmonics.
@@ -126,6 +127,7 @@ def get_spherical_harmonics(l, theta, phi):  # noqa
     Returns:
         tensor of shape [*theta.shape, 2*l+1]
     """
-    return torch.stack([get_spherical_harmonics_element(l, m, theta, phi)
-                        for m in range(-l, l + 1)],
-                       dim=-1)  # noqa
+    return torch.stack(
+        [get_spherical_harmonics_element(l, m, theta, phi) for m in range(-l, l + 1)],
+        dim=-1,
+    )  # noqa

@@ -1,28 +1,31 @@
 """Helper functions for computing model loss
 """
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn.functional as F  # noqa
 from einops import rearrange  # noqa
-from torch import einsum
-from torch import nn
+from torch import einsum, nn
 
 from protein_learning.common.helpers import default
 
 MAX_FLOAT = 1e6
-to_rel_coord = lambda x: rearrange(x, "... n c -> ... n () c") - rearrange(x, "... n c-> ... () n c")
-outer_sum = lambda x, y=None: rearrange(x, "... i -> ... i ()") + rearrange(default(y, x), "... i -> ... () i")
+to_rel_coord = lambda x: rearrange(x, "... n c -> ... n () c") - rearrange(
+    x, "... n c-> ... () n c"
+)
+outer_sum = lambda x, y=None: rearrange(x, "... i -> ... i ()") + rearrange(
+    default(y, x), "... i -> ... () i"
+)
 outer_prod = lambda x, y=None: einsum("... i, ... j -> ... i j", x, default(y, x))
 
 
 def FeedForward(
-        dim_in: int,
-        dim_out: int,
-        pre_norm: bool = False,
-        dim_hidden: Optional[int] = None,
-        n_hidden_layers: int = 1,
-        nonlin=nn.GELU
+    dim_in: int,
+    dim_out: int,
+    pre_norm: bool = False,
+    dim_hidden: Optional[int] = None,
+    n_hidden_layers: int = 1,
+    nonlin=nn.GELU,
 ):
     """FeedForward Network"""
     dim_hidden = default(dim_hidden, dim_in) if n_hidden_layers > 0 else dim_out
@@ -40,12 +43,12 @@ def FeedForward(
 def partition(lst: List, chunk: int):
     """Parittions a list into chunks of size chunk"""
     for i in range(0, len(lst), chunk):  # noqa
-        yield lst[i:i + chunk]
+        yield lst[i : i + chunk]
 
 
 def get_tm_scale(n: int) -> float:
     """Gets scale value applied to normalize TM-score"""
-    return 0.5 if n <= 15 else 1.24 * ((n - 15.0) ** (1. / 3.)) - 1.8
+    return 0.5 if n <= 15 else 1.24 * ((n - 15.0) ** (1.0 / 3.0)) - 1.8
 
 
 def get_loss_func(p: int, *args, **kwargs):
@@ -61,7 +64,13 @@ def get_loss_func(p: int, *args, **kwargs):
 class ClampedSmoothL1Loss(torch.nn.Module):
     """Clamped smooth l1-loss"""
 
-    def __init__(self, beta: float = 1, reduction: str = 'mean', min_clamp: float = 0, max_clamp: float = MAX_FLOAT):
+    def __init__(
+        self,
+        beta: float = 1,
+        reduction: str = "mean",
+        min_clamp: float = 0,
+        max_clamp: float = MAX_FLOAT,
+    ):
         super().__init__()
         self.beta = beta
         self.reduction = reduction
@@ -75,7 +84,7 @@ class ClampedSmoothL1Loss(torch.nn.Module):
         else:
             n = torch.abs(pred - actual)
             cond = n < self.beta
-            loss = torch.where(cond, 0.5 * n ** 2 / self.beta, n - 0.5 * self.beta)
+            loss = torch.where(cond, 0.5 * n**2 / self.beta, n - 0.5 * self.beta)
         loss = loss.clamp(*self.clamp)
         if self.reduction == "mean":
             return loss.mean() if loss.numel() > 0 else 0.0 * loss.sum()
@@ -89,12 +98,13 @@ class ClampedMSELoss(torch.nn.Module):
     """Clamped MSE loss"""
 
     def __init__(
-            self,
-            beta=None,  # noqa
-            reduction: str = 'mean',
-            min_clamp: float = 0,
-            max_clamp: float = 10,
-            normalize=True):
+        self,
+        beta=None,  # noqa
+        reduction: str = "mean",
+        min_clamp: float = 0,
+        max_clamp: float = 10,
+        normalize=True,
+    ):
         super().__init__()
         self.reduction = reduction
         self.clamp = (min_clamp, max_clamp)
@@ -121,7 +131,7 @@ def sigmoid_cross_entropy(logits: torch.Tensor, labels: torch.Tensor) -> torch.T
     """Computes sigmoid cross entropy of logits given ground truth labels"""
     log_p = nn.functional.logsigmoid(logits)
     log_not_p = nn.functional.logsigmoid(-logits)
-    return -labels * log_p - (1. - labels) * log_not_p
+    return -labels * log_p - (1.0 - labels) * log_not_p
 
 
 def get_centers(bin_edges: torch.Tensor):
@@ -138,8 +148,8 @@ def get_centers(bin_edges: torch.Tensor):
 
 
 def compute_predicted_distance_error(
-        logits: torch.Tensor,
-        dist_bins: torch.Tensor) -> torch.Tensor:
+    logits: torch.Tensor, dist_bins: torch.Tensor
+) -> torch.Tensor:
     """Computes aligned confidence metrics from logits.
 
     Args:
@@ -163,10 +173,12 @@ def safe_detach_item(x) -> float:
     return x
 
 
-def to_info(baseline, actual, pred, loss_val: Optional[float] = None) -> Dict[str, float]:
+def to_info(
+    baseline, actual, pred, loss_val: Optional[float] = None
+) -> Dict[str, float]:
     return dict(
         baseline=safe_detach_item(baseline),
         actual=safe_detach_item(actual),
         predicted=safe_detach_item(pred),
-        loss_val=safe_detach_item(loss_val)
+        loss_val=safe_detach_item(loss_val),
     )

@@ -5,8 +5,10 @@ from typing import List
 import torch
 from einops import rearrange, repeat  # noqa
 
-from protein_learning.networks.common.helpers.torch_utils import batched_index_select
-from protein_learning.networks.common.helpers.torch_utils import to_rel_pos
+from protein_learning.networks.common.helpers.torch_utils import (
+    batched_index_select,
+    to_rel_pos,
+)
 
 
 def safe_to_device(x, device):
@@ -14,17 +16,17 @@ def safe_to_device(x, device):
 
 
 class NeighborInfo:
-
-    def __init__(self,
-                 indices: torch.LongTensor,
-                 mask: torch.BoolTensor,
-                 rel_dists: torch.Tensor,
-                 rel_pos: torch.Tensor,
-                 coords: torch.Tensor,
-                 max_radius: float,
-                 top_k: int,
-                 full_mask: torch.Tensor,
-                 ):
+    def __init__(
+        self,
+        indices: torch.LongTensor,
+        mask: torch.BoolTensor,
+        rel_dists: torch.Tensor,
+        rel_pos: torch.Tensor,
+        coords: torch.Tensor,
+        max_radius: float,
+        top_k: int,
+        full_mask: torch.Tensor,
+    ):
         self.indices = indices
         self.mask = mask
         self.rel_dists = rel_dists
@@ -56,10 +58,10 @@ class NeighborInfo:
 
 
 def get_neighbor_info(
-        coords: torch.Tensor,
-        max_radius: float,
-        top_k: int,
-        exclude_self: bool = True,
+    coords: torch.Tensor,
+    max_radius: float,
+    top_k: int,
+    exclude_self: bool = True,
 ) -> NeighborInfo:
     """Gets the k nearest neighbors for each input coordinate
 
@@ -81,14 +83,18 @@ def get_neighbor_info(
         equals coords[b][i]-coords[b][j].
     """
     with torch.no_grad():
-        assert len(coords.shape) == 3, f"got shape {coords.shape}, expected shape to have length 3"
-        #coords = (coords - torch.mean(coords, dim=1, keepdim=True)).detach().clone()
+        assert (
+            len(coords.shape) == 3
+        ), f"got shape {coords.shape}, expected shape to have length 3"
+        # coords = (coords - torch.mean(coords, dim=1, keepdim=True)).detach().clone()
         b, n, device = *coords.shape[:2], coords.device  # noqa
 
         # masks and helpers
-        exclude_self_mask = rearrange(~torch.eye(n, dtype=torch.bool, device=device).bool(), 'i j -> () i j')  # noqa
+        exclude_self_mask = rearrange(
+            ~torch.eye(n, dtype=torch.bool, device=device).bool(), "i j -> () i j"
+        )  # noqa
 
-        indices = repeat(torch.arange(n, device=device), 'i -> b j i', b=b, j=n)
+        indices = repeat(torch.arange(n, device=device), "i -> b j i", b=b, j=n)
 
         # exclude edge of token to itself
         if exclude_self:
@@ -96,18 +102,24 @@ def get_neighbor_info(
 
         rel_pos = to_rel_pos(coords)
         if exclude_self:
-            rel_pos = rel_pos.masked_select(exclude_self_mask[..., None]).reshape(b, n, n - 1, 3)
+            rel_pos = rel_pos.masked_select(exclude_self_mask[..., None]).reshape(
+                b, n, n - 1, 3
+            )
         rel_dist = rel_pos.norm(dim=-1)
 
         total_neighbors = int(min(top_k, n - 1))
-        dist_values, nearest_indices = rel_dist.topk(total_neighbors, dim=-1, largest=False)
+        dist_values, nearest_indices = rel_dist.topk(
+            total_neighbors, dim=-1, largest=False
+        )
 
         neighbor_mask = dist_values <= max_radius
         neighbor_rel_dist = batched_index_select(rel_dist, nearest_indices, dim=2)
         neighbor_rel_pos = batched_index_select(rel_pos, nearest_indices, dim=2)
         neighbor_indices = batched_index_select(indices, nearest_indices, dim=2)
         full_neighbor_mask = rel_dist <= dist_values[..., -1].reshape(b, n, 1)
-        full_neighbor_mask = torch.logical_and(full_neighbor_mask, rel_dist <= max_radius)  # noqa
+        full_neighbor_mask = torch.logical_and(
+            full_neighbor_mask, rel_dist <= max_radius
+        )  # noqa
         return NeighborInfo(
             indices=neighbor_indices,
             mask=neighbor_mask,
@@ -116,5 +128,5 @@ def get_neighbor_info(
             rel_pos=neighbor_rel_pos.detach(),
             coords=coords.detach(),
             max_radius=max_radius,
-            top_k=total_neighbors
+            top_k=total_neighbors,
         )

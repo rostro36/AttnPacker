@@ -1,14 +1,14 @@
 import os
 import sys
+import time
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
+
+import protein_learning.common.protein_constants as pc
+from protein_learning.common.data.data_types.protein import Protein
+from protein_learning.common.data.datasets.utils import set_canonical_coords_n_masks
 from protein_learning.protein_utils.sidechains.project_sidechains import (
     project_onto_rotamers,
 )
-from protein_learning.common.data.data_types.protein import Protein
-import protein_learning.common.protein_constants as pc
-from protein_learning.common.data.datasets.utils import set_canonical_coords_n_masks
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-
-import time
 
 
 def project_pdb(
@@ -43,14 +43,19 @@ def project_pdb(
             reduction="sum",
             p=2,
         ),
-        optim_kwargs=dict(max_iter=max_optim_iters, lr=1e-3, line_search_fn="strong_wolfe"),
+        optim_kwargs=dict(
+            max_iter=max_optim_iters, lr=1e-3, line_search_fn="strong_wolfe"
+        ),
         use_input_backbone=True,
         torsion_deviation_loss_wt=torsion_loss_wt,  # penalize torsion angle deviations
         device=device,
     )
 
     if pdb_path_out is None:
-        pdb_path_out = os.path.join(os.path.dirname(pdb_path_in), f"post-processed-{os.path.basename(pdb_path_in)}")
+        pdb_path_out = os.path.join(
+            os.path.dirname(pdb_path_in),
+            f"post-processed-{os.path.basename(pdb_path_in)}",
+        )
     print(f"Saving to: {pdb_path_out}")
     protein.to_pdb(
         path=pdb_path_out,
@@ -67,14 +72,26 @@ if __name__ == "__main__":
 
     parser.add_argument("pdb_path_in", help="path to input pdb")
     parser.add_argument(
-        "--pdb_path_out", help="path to save projected pdb to (dafaults to post-processed-<input pdb name>.pdb"
-    )
-    parser.add_argument("--steric_wt", help="weight to use for steric clash loss", default=0.2, type=float)
-    parser.add_argument(
-        "--steric_tol_allowance", help="subtract this number from all atom vdW radii", default=0.05, type=float
+        "--pdb_path_out",
+        help="path to save projected pdb to (dafaults to post-processed-<input pdb name>.pdb",
     )
     parser.add_argument(
-        "--steric_tol_frac", help="set vdW radii to steric_tol_frac*vdW(atom_type)", default=0.925, type=float
+        "--steric_wt",
+        help="weight to use for steric clash loss",
+        default=0.2,
+        type=float,
+    )
+    parser.add_argument(
+        "--steric_tol_allowance",
+        help="subtract this number from all atom vdW radii",
+        default=0.05,
+        type=float,
+    )
+    parser.add_argument(
+        "--steric_tol_frac",
+        help="set vdW radii to steric_tol_frac*vdW(atom_type)",
+        default=0.925,
+        type=float,
     )
     parser.add_argument(
         "--steric_hbond_allowance",
@@ -94,7 +111,12 @@ if __name__ == "__main__":
         type=float,
         default=0,
     )
-    parser.add_argument("--device", help="device to use when running this procedure", type=str, default="cpu")
+    parser.add_argument(
+        "--device",
+        help="device to use when running this procedure",
+        type=str,
+        default="cpu",
+    )
     args = parser.parse_args(sys.argv[1:])
     start = time.time()
     project_pdb(**vars(args))

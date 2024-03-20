@@ -1,5 +1,5 @@
 import random
-from typing import Tuple, List
+from typing import List, Tuple
 
 import numpy as np
 import torch
@@ -8,10 +8,13 @@ from einops import rearrange  # noqa
 from torch import Tensor
 
 from protein_learning.common.data.data_types.protein import Protein
-from protein_learning.networks.loss.coord_loss import CoordDeviationLoss
-from protein_learning.networks.loss.coord_loss import TMLoss
 from protein_learning.common.helpers import exists
-from protein_learning.common.protein_constants import AA_TO_SC_ATOMS, BB_ATOMS, NAT_AA_SET
+from protein_learning.common.protein_constants import (
+    AA_TO_SC_ATOMS,
+    BB_ATOMS,
+    NAT_AA_SET,
+)
+from protein_learning.networks.loss.coord_loss import CoordDeviationLoss, TMLoss
 
 
 def fill_atom_masks(protein: Protein, overwrite: bool = False) -> Protein:
@@ -59,7 +62,9 @@ def get_contiguous_crop(crop_len: int, n_res: int) -> Tuple[int, int]:
     return start, min(end, start + crop_len)
 
 
-def get_dimer_crop_lens(partition: List[Tensor], crop_len: int, min_len=100) -> Tuple[int, int]:
+def get_dimer_crop_lens(
+    partition: List[Tensor], crop_len: int, min_len=100
+) -> Tuple[int, int]:
     assert len(partition) == 2, f"{len(partition)}"
     l1, l2 = len(partition[0]), len(partition[1])
     if l1 + l2 <= crop_len or crop_len < 0:
@@ -82,7 +87,9 @@ def get_dimer_crop(partition: List[Tensor], crop_len: int, min_len=100) -> List[
     return [partition[0][mn1:mx1], partition[1][mn2:mx2]]
 
 
-def get_dimer_spatial_crop(partition, coords: List[Tensor], crop_len, min_len: int = 100, sigma=4) -> List[Tensor]:
+def get_dimer_spatial_crop(
+    partition, coords: List[Tensor], crop_len, min_len: int = 100, sigma=4
+) -> List[Tensor]:
     assert len(coords) == 2 and coords[0].ndim == 2
     l1, l2 = get_dimer_crop_lens(partition, crop_len=crop_len, min_len=min_len)
     scores = 1 / (1 + torch.square(torch.cdist(coords[0], coords[1]) / sigma))

@@ -3,9 +3,8 @@ from functools import wraps
 from typing import Any
 
 import torch
-from torch import Tensor
-from einops import rearrange # noqa
-from torch import nn
+from einops import rearrange  # noqa
+from torch import Tensor, nn
 
 from protein_learning.networks.common.utils import exists
 
@@ -49,8 +48,9 @@ def safe_norm(x: Tensor, dim: int, keepdim=False):
 
 
 def to_rel_pos(coords):
-    return rearrange(coords, 'b n ... c -> b () n ... c') - \
-           rearrange(coords, 'b n ... c -> b n () ... c')
+    return rearrange(coords, "b n ... c -> b () n ... c") - rearrange(
+        coords, "b n ... c -> b n () ... c"
+    )
 
 
 def rand_uniform(shape, min_val, max_val):
@@ -62,10 +62,10 @@ def masked_mean(tensor, mask, dim=-1, keepdim=False):
         return torch.mean(tensor, dim=dim, keepdim=keepdim)
     diff_len = len(tensor.shape) - len(mask.shape)
     mask = mask[(..., *((None,) * diff_len))]
-    tensor.masked_fill_(~mask, 0.)
+    tensor.masked_fill_(~mask, 0.0)
     total_el = mask.sum(dim=dim, keepdim=keepdim)
-    mean = tensor.sum(dim=dim, keepdim=keepdim) / total_el.clamp(min=1.)
-    mean.masked_fill_(total_el == 0, 0.)
+    mean = tensor.sum(dim=dim, keepdim=keepdim) / total_el.clamp(min=1.0)
+    mean.masked_fill_(total_el == 0, 0.0)
     return mean
 
 
@@ -82,7 +82,7 @@ def fast_split(arr, splits, dim=0):
 
 
 def batched_index_select(values, indices, dim=1):
-    value_dims = values.shape[(dim + 1):]
+    value_dims = values.shape[(dim + 1) :]
     values_shape, indices_shape = map(lambda t: list(t.shape), (values, indices))
     indices = indices[(..., *((None,) * len(value_dims)))]
     indices = indices.expand(*((-1,) * len(indices_shape)), *value_dims)
@@ -105,7 +105,7 @@ def fourier_encode(x, num_encodings=4, include_self=True, flatten=True):
     x = x / scales
     x = torch.cat([x.sin(), x.cos()], dim=-1)
     x = torch.cat((x, orig_x), dim=-1) if include_self else x
-    x = rearrange(x, 'b m n ... -> b m n (...)') if flatten else x
+    x = rearrange(x, "b m n ... -> b m n (...)") if flatten else x
     return x
 
 
@@ -136,11 +136,17 @@ class GradientChecker(nn.Module):
             self.register_hook(child_module, parents + [name])
         for name, par in module.named_parameters():
             s = f" parameter name :{name}, parent modules {parents}"
-            par.register_hook(lambda grad, _s=s: print(_s, f'num gradient'
-                                                           f' nans {torch.sum(torch.isnan(grad))}, has'
-                                                           f' nan  {torch.sum(torch.isnan(grad)) > 0}, '
-                                                           f' shape {grad.shape}') if torch.sum(
-                torch.isnan(grad)).item() > 0 else None)
+            par.register_hook(
+                lambda grad, _s=s: print(
+                    _s,
+                    f"num gradient"
+                    f" nans {torch.sum(torch.isnan(grad))}, has"
+                    f" nan  {torch.sum(torch.isnan(grad)) > 0}, "
+                    f" shape {grad.shape}",
+                )
+                if torch.sum(torch.isnan(grad)).item() > 0
+                else None
+            )
 
     def forward(self, *args, **kwargs):
         return self.model(*args, **kwargs)
@@ -159,7 +165,9 @@ def nan_replace_hook(model, val=0):
 
 
 def nan_hook(grad, val=0):
-    safe_tensor = torch.where(torch.isnan(grad), torch.ones_like(grad, device=grad.device) * val, grad)
+    safe_tensor = torch.where(
+        torch.isnan(grad), torch.ones_like(grad, device=grad.device) * val, grad
+    )
     safe_tensor = safe_tensor.to(grad.device)
     return safe_tensor
 
@@ -182,7 +190,7 @@ def get_tensor_device_and_dtype(features):
     return first_tensor.device, first_tensor.dtype
 
 
-def _to_device(*args, device: Any = 'cpu'):
+def _to_device(*args, device: Any = "cpu"):
     ret = [a.to(device) if isinstance(a, torch.Tensor) else a for a in args]
     return ret[0] if len(ret) == 1 else ret
 

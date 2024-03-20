@@ -1,21 +1,23 @@
+from typing import Dict, Optional, Tuple
+
 import torch
-from torch import nn, Tensor
-from scp_postprocess.of_rigid_utils import Rigid, Rotation
-from typing import Optional, Dict, Tuple
-from scp_postprocess.of_utils import Linear
-from scp_postprocess.helpers import default, exists
+from torch import Tensor, nn
 from torchtyping import TensorType, patch_typeguard
 from typeguard import typechecked
+
+from scp_postprocess.helpers import default, exists
+from scp_postprocess.of_rigid_utils import Rigid, Rotation
+from scp_postprocess.of_utils import Linear
 
 patch_typeguard()
 
 from scp_postprocess.sidechain_rigid_utils import (
     frames_and_literature_positions_to_atom37_pos,
-    torsion_angles_to_frames,
-    restype_rigid_group_default_frame,
-    restype_atom37_to_rigid_group,
     restype_atom37_mask,
     restype_atom37_rigid_group_positions,
+    restype_atom37_to_rigid_group,
+    restype_rigid_group_default_frame,
+    torsion_angles_to_frames,
 )
 
 
@@ -89,7 +91,9 @@ class AngleResnet(nn.Module):
         self.linear_out = Linear(self.c_hidden, self.no_angles * 2)
         self.relu = nn.ReLU()
 
-    def forward(self, s: torch.Tensor, s_initial: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, s: torch.Tensor, s_initial: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Args:
             s:
@@ -219,7 +223,9 @@ class FACoordModule(nn.Module):
         # Separated purely to make testing less annoying
         return torsion_angles_to_frames(r, alpha, f, self.default_frames)
 
-    def frames_and_literature_positions_to_atom37_pos(self, r, f):  # [*, N, 8]  # [*, N]
+    def frames_and_literature_positions_to_atom37_pos(
+        self, r, f
+    ):  # [*, N, 8]  # [*, N]
         # Lazily initialize the residue constants on the correct device
         self._init_residue_constants(r.get_rots().dtype, r.get_rots().device)
         return frames_and_literature_positions_to_atom37_pos(
@@ -254,7 +260,9 @@ class FACoordModule(nn.Module):
             N, CA, C, *_ = coords.unbind(dim=-2)
             rigids = Rigid.make_transform_from_reference(N, CA, C)
         if not exists(angles):
-            unnormalized_angles, angles = self.angle_resnet(residue_feats, residue_feats)
+            unnormalized_angles, angles = self.angle_resnet(
+                residue_feats, residue_feats
+            )
         else:
             unnormalized_angles = angles
 

@@ -2,20 +2,22 @@
 from __future__ import annotations
 
 import random
-from typing import Callable, Optional, Dict
+from typing import Callable, Dict, Optional
 
 import numpy as np
 import torch
-from einops import repeat, rearrange  # noqa
+from einops import rearrange, repeat  # noqa
 from torch import Tensor
 
 from protein_learning.common.data.data_types.model_input import ExtraInput
 from protein_learning.common.data.data_types.protein import Protein
 from protein_learning.common.global_constants import get_logger
-from protein_learning.common.helpers import exists, default
-from protein_learning.features.feature_config import FeatureName
-from protein_learning.features.feature_config import InputFeatureConfig
-from protein_learning.features.feature_generator import FeatureGenerator, get_input_features
+from protein_learning.common.helpers import default, exists
+from protein_learning.features.feature_config import FeatureName, InputFeatureConfig
+from protein_learning.features.feature_generator import (
+    FeatureGenerator,
+    get_input_features,
+)
 from protein_learning.features.input_features import InputFeatures
 from protein_learning.features.masking.inter_chain import InterChainMaskGenerator
 from protein_learning.features.masking.intra_chain import IntraChainMaskGenerator
@@ -91,9 +93,13 @@ class DefaultFeatureGenerator(FeatureGenerator):
 
         # sanity check
         if apply_masks:
-            assert config.pad_embeddings and (exists(intra_chain_mask_kwargs) or exists(inter_chain_mask_kwargs))
+            assert config.pad_embeddings and (
+                exists(intra_chain_mask_kwargs) or exists(inter_chain_mask_kwargs)
+            )
 
-    def generate_masks(self, protein: Protein, extra: ExtraInput, native: Optional[Protein] = None):
+    def generate_masks(
+        self, protein: Protein, extra: ExtraInput, native: Optional[Protein] = None
+    ):
         """Generate seq/feature/pair/chain masks"""
 
         ids_to_mask = self.select_chain_mask_fn(protein=protein)
@@ -119,9 +125,13 @@ class DefaultFeatureGenerator(FeatureGenerator):
 
         # Expand sequence and feature mask to full protein
         if exists(seq_mask):
-            seq_mask = chain_mask_to_full_mask(len(protein), seq_mask, ids_to_mask)  # noqa
+            seq_mask = chain_mask_to_full_mask(
+                len(protein), seq_mask, ids_to_mask
+            )  # noqa
         if exists(feat_mask):
-            feat_mask = chain_mask_to_full_mask(len(protein), feat_mask, ids_to_mask)  # noqa
+            feat_mask = chain_mask_to_full_mask(
+                len(protein), feat_mask, ids_to_mask
+            )  # noqa
 
         # Mask for inter-chain pair features
         if exists(self.inter_mask) and protein.is_complex:
@@ -163,18 +173,30 @@ class DefaultFeatureGenerator(FeatureGenerator):
         # Mask Sequence
         if exists(seq_mask) and self.apply_mask and self.mask_seq:
             feats[FeatureName.RES_TY.value].apply_mask(seq_mask)
-            logger.info(f"[seq] masked : {seq_mask[seq_mask].numel()}/{seq_mask.numel()}")
+            logger.info(
+                f"[seq] masked : {seq_mask[seq_mask].numel()}/{seq_mask.numel()}"
+            )
         if FeatureName.SC_DIHEDRAL.value in feats:
-            _dihedral_mask = default(dihedral_mask, torch.ones(len(protein), device=protein.device).bool())
-            dihedral_mask = torch.logical_or(default(seq_mask, _dihedral_mask), _dihedral_mask)
+            _dihedral_mask = default(
+                dihedral_mask, torch.ones(len(protein), device=protein.device).bool()
+            )
+            dihedral_mask = torch.logical_or(
+                default(seq_mask, _dihedral_mask), _dihedral_mask
+            )
             feats[FeatureName.SC_DIHEDRAL.value].apply_mask(dihedral_mask)
         # Apply intra-chain masks
         if exists(feat_mask) and self.apply_mask and self.mask_feats:
-            feats = mask_intra_chain_features(feats, feat_mask=feat_mask, mask_seq=False)
-            logger.info(f"[feat] masked : {feat_mask[feat_mask].numel()}/{feat_mask.numel()}")
+            feats = mask_intra_chain_features(
+                feats, feat_mask=feat_mask, mask_seq=False
+            )
+            logger.info(
+                f"[feat] masked : {feat_mask[feat_mask].numel()}/{feat_mask.numel()}"
+            )
         # Apply inter-chain pair mask
         if exists(inter_chain_pair_mask) and self.apply_mask and self.mask_feats:
-            feats = mask_inter_chain_pair_features(feats=feats, pair_mask=inter_chain_pair_mask)
+            feats = mask_inter_chain_pair_features(
+                feats=feats, pair_mask=inter_chain_pair_mask
+            )
             logger.info(
                 f"[inter-chain] masked : "
                 f"{inter_chain_pair_mask[inter_chain_pair_mask].numel()}"

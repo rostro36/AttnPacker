@@ -9,27 +9,36 @@ try:
     from functools import cached_property  # noqa
 except:  # noqa
     from cached_property import cached_property  # noqa
-from typing import Optional, Dict, List, Union, Any, Tuple
+
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
+from einops import rearrange  # noqa
 from torch import Tensor
 
-from protein_learning.common.rigids import Rigids
-from protein_learning.common.helpers import exists, safe_to_device, default
+from protein_learning.common.helpers import default, exists, safe_to_device
+from protein_learning.common.io.dssp_utils import (
+    encode_sec_structure,
+    get_ss_from_pdb_and_seq,
+)
+from protein_learning.common.io.extract_cdrs import extract_cdr_posns
+from protein_learning.common.io.pdb_io import write_pdb
 from protein_learning.common.io.pdb_utils import (
     extract_atom_coords_n_mask_tensors,
     extract_pdb_seq_from_pdb_file,
 )
 from protein_learning.common.io.sequence_utils import load_fasta_file
-from protein_learning.common.io.pdb_io import write_pdb
-from protein_learning.common.protein_constants import BB_ATOMS, SC_ATOMS, AA_TO_INDEX, ALL_ATOMS
+from protein_learning.common.protein_constants import (
+    AA_TO_INDEX,
+    ALL_ATOMS,
+    BB_ATOMS,
+    SC_ATOMS,
+)
+from protein_learning.common.rigids import Rigids
+from protein_learning.protein_utils.align.kabsch_align import (
+    _calc_kabsch_rot_n_trans,
+)  # noqa
 from protein_learning.protein_utils.align.per_residue import impute_beta_carbon
-
-
-from protein_learning.protein_utils.align.kabsch_align import _calc_kabsch_rot_n_trans  # noqa
-from einops import rearrange  # noqa
-from protein_learning.common.io.dssp_utils import get_ss_from_pdb_and_seq, encode_sec_structure
-from protein_learning.common.io.extract_cdrs import extract_cdr_posns
 
 BB_ATOM_SET, SC_ATOM_SET = set(BB_ATOMS), set(SC_ATOMS)
 
@@ -82,11 +91,19 @@ class Protein:
         self._name = name
         if exists(res_ids):
             res_ids = [res_ids] if torch.is_tensor(res_ids) else res_ids
-        self.res_ids = default(res_ids, [torch.arange(len(seq), device=atom_coords.device)])
-        assert sum(map(len, self.res_ids)) == len(seq), f"{sum(map(len, self.res_ids))}, {len(seq)}"
-        self.chain_indices = default(chain_indices, [torch.arange(len(seq), device=atom_coords.device)])
+        self.res_ids = default(
+            res_ids, [torch.arange(len(seq), device=atom_coords.device)]
+        )
+        assert sum(map(len, self.res_ids)) == len(
+            seq
+        ), f"{sum(map(len, self.res_ids))}, {len(seq)}"
+        self.chain_indices = default(
+            chain_indices, [torch.arange(len(seq), device=atom_coords.device)]
+        )
         assert sum(map(len, self.chain_indices)) == len(seq)
-        self.chain_ids = default(chain_ids, torch.zeros(len(seq), device=atom_coords.device))
+        self.chain_ids = default(
+            chain_ids, torch.zeros(len(seq), device=atom_coords.device)
+        )
         assert len(self.chain_ids) == len(seq)
         self.crops, self.input_partition = None, self.chain_indices
         self.chain_names = default(chain_names, [self.name] * len(self.chain_indices))
@@ -95,7 +112,9 @@ class Protein:
         if exists(sec_struct):
             assert len(sec_struct) == len(seq), f"{len(sec_struct)},{len(seq)}"
         self.sec_struct = sec_struct
-        self.cdrs = cdrs  # dict with keys "heavy" and "light" mapping to 0-indexed cdr posns
+        self.cdrs = (
+            cdrs  # dict with keys "heavy" and "light" mapping to 0-indexed cdr posns
+        )
         self.replica = 0
 
     def _check_chain_indices(self):
@@ -105,7 +124,9 @@ class Protein:
         idx_set = to_set(torch.cat(self.chain_indices).cpu())
         expected_idxs = to_set(torch.arange(len(self)))
         assert len(idx_set) == len(self), f"{len(idx_set)},{len(self)}"
-        assert idx_set == expected_idxs, f"{self.chain_indices},{expected_idxs - idx_set}\n{idx_set - expected_idxs}"
+        assert (
+            idx_set == expected_idxs
+        ), f"{self.chain_indices},{expected_idxs - idx_set}\n{idx_set - expected_idxs}"
 
     def chain_seq(self, chain_idx: int) -> str:
         """Sequence for chain at given index"""
@@ -154,7 +175,9 @@ class Protein:
             try:
                 light_cdrs = extract_cdr_posns(_light, [], [l_chain])[1][l_chain]
             except:
-                light_cdrs = extract_cdr_posns(_light, [], [l_chain.lower()])[1][l_chain.lower()]
+                light_cdrs = extract_cdr_posns(_light, [], [l_chain.lower()])[1][
+                    l_chain.lower()
+                ]
             light_atom_coords = light.atom_coords
             light_seq, light_ss = light.seq, light.sec_struct
             light_atom_masks = light.atom_masks
@@ -170,7 +193,9 @@ class Protein:
         try:
             heavy_cdrs = extract_cdr_posns(_heavy, [h_chain], [])[0][h_chain]
         except:
-            heavy_cdrs = extract_cdr_posns(_heavy, [h_chain.lower()], [])[0][h_chain.lower()]
+            heavy_cdrs = extract_cdr_posns(_heavy, [h_chain.lower()], [])[0][
+                h_chain.lower()
+            ]
         # build single chain for antibody
         atom_coords = torch.cat((heavy.atom_coords, light_atom_coords), dim=0)
         atom_masks = torch.cat((heavy.atom_masks, light_atom_masks), dim=0)
@@ -209,7 +234,13 @@ class Protein:
 
     @classmethod
     def FromPDB(cls, pdb_path: str) -> Protein:
-        return Protein.FromPDBAndSeq(pdb_path=pdb_path, seq=None, missing_seq=True, atom_tys=ALL_ATOMS, load_ss=False)
+        return Protein.FromPDBAndSeq(
+            pdb_path=pdb_path,
+            seq=None,
+            missing_seq=True,
+            atom_tys=ALL_ATOMS,
+            load_ss=False,
+        )
 
     @classmethod
     def FromPDBAndSeq(
@@ -270,7 +301,9 @@ class Protein:
 
     def crop(self, start: int, end: int) -> Protein:
         """Crop the protein from start..end"""
-        assert end <= len(self.seq), f"end: {end}, len(seq): {len(self.seq)} len(self): {len(self)}"
+        assert end <= len(
+            self.seq
+        ), f"end: {end}, len(seq): {len(self.seq)} len(self): {len(self)}"
         self.seq = self.seq[start:end]
         self.atom_coords = self.atom_coords[..., start:end, :, :].clone()
         self.atom_masks = self.atom_masks[..., start:end, :].clone()
@@ -432,10 +465,15 @@ class Protein:
     def get_chain_coords(self):
         """List of per-chain residue coordinates"""
         assert self.chain_indices is not None
-        return [self.atom_coords[..., self.chain_indices[i], :, :] for i in range(len(self.chain_indices))]
+        return [
+            self.atom_coords[..., self.chain_indices[i], :, :]
+            for i in range(len(self.chain_indices))
+        ]
 
     def get_atom_coords(
-        self, atom_tys: Optional[Union[str, List[str]]] = None, coords: Optional[Tensor] = None
+        self,
+        atom_tys: Optional[Union[str, List[str]]] = None,
+        coords: Optional[Tensor] = None,
     ) -> Tensor:
         """Gets the atom coordinates for the given atom types
 
@@ -452,7 +490,10 @@ class Protein:
         return (
             coords[..., atom_posns[atom_tys], :]
             if isinstance(atom_tys, str)
-            else torch.cat([coords[..., atom_posns[ty], :].unsqueeze(-2) for ty in atom_tys], dim=-2)
+            else torch.cat(
+                [coords[..., atom_posns[ty], :].unsqueeze(-2) for ty in atom_tys],
+                dim=-2,
+            )
         )
 
     def get_atom_masks(
@@ -481,7 +522,9 @@ class Protein:
             return torch.cat([m.unsqueeze(-1) for m in masks], dim=-1)
 
     def get_atom_coords_n_masks(
-        self, atom_tys: Optional[Union[str, List[str]]] = None, coords: Optional[Tensor] = None
+        self,
+        atom_tys: Optional[Union[str, List[str]]] = None,
+        coords: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Tensor]:
         """Gets the atom coordinates and masks for the given atom types
 
@@ -527,14 +570,20 @@ class Protein:
         align_from = self.get_atom_coords(atom_ty)
         mask = self.get_atom_masks(atom_ty)
         reshape = lambda x: x[0].unsqueeze(0) if x[0].ndim < x[1] else x[0]
-        align_to, align_from, mask = map(reshape, ((align_to, 3), (align_from, 3), (mask, 2)))
-        assert align_to.ndim == 3 and align_to.shape == align_from.shape, f"{align_to.shape},{align_from.shape}"
+        align_to, align_from, mask = map(
+            reshape, ((align_to, 3), (align_from, 3), (mask, 2))
+        )
+        assert (
+            align_to.ndim == 3 and align_to.shape == align_from.shape
+        ), f"{align_to.shape},{align_from.shape}"
         rot_to, mean_to, mean_from = _calc_kabsch_rot_n_trans(
             align_to, align_from, mask=self.get_atom_masks(atom_ty).unsqueeze(0)
         )
         coords = rearrange(self.atom_coords, "n a c -> () (n a) c")
         aligned_from = torch.matmul(coords - mean_from, rot_to) + mean_to
-        aligned_from = rearrange(aligned_from, "b (n a) c -> (b n) a c", n=self.atom_coords.shape[0])
+        aligned_from = rearrange(
+            aligned_from, "b (n a) c -> (b n) a c", n=self.atom_coords.shape[0]
+        )
         if overwrite:
             self.overwrite_coords(aligned_from, self.atom_tys)
         return aligned_from
@@ -562,10 +611,16 @@ class Protein:
         chain_ids = []
         chain_labels = default(chain_labels, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
         chain_indices = default(chain_indices, self.chain_indices)
-        chain_indices = [chain_indices[chain_idx]] if exists(chain_idx) else chain_indices
+        chain_indices = (
+            [chain_indices[chain_idx]] if exists(chain_idx) else chain_indices
+        )
         for _chain_idx, chain_indices in enumerate(chain_indices):
             _seq, residue_indices = "", []
-            _res_idxs = res_idxs[_chain_idx] if exists(res_idxs) else list(range(len(chain_indices)))
+            _res_idxs = (
+                res_idxs[_chain_idx]
+                if exists(res_idxs)
+                else list(range(len(chain_indices)))
+            )
             for idx, i in enumerate(chain_indices.detach().cpu().numpy()):
                 atoms = {}
                 for atom in atom_tys:
@@ -584,37 +639,65 @@ class Protein:
                 for i in chain_indices:
                     ss += self.sec_struct[i]
             write_pdb(
-                coord_dicts, seq=_seq, out_path=path, chain_ids=chain_ids, ss=None, res_idxs=residue_indices, beta=beta
+                coord_dicts,
+                seq=_seq,
+                out_path=path,
+                chain_ids=chain_ids,
+                ss=None,
+                res_idxs=residue_indices,
+                beta=beta,
             )
 
-    def impute_cb(self, override: bool = False, exists_ok: bool = False) -> Tuple[Tensor, Tensor]:
+    def impute_cb(
+        self, override: bool = False, exists_ok: bool = False
+    ) -> Tuple[Tensor, Tensor]:
         """Impute CB atom position"""
         assert all([x in self.atom_ty_set for x in ["N", "CA", "C"]])
         coords = self.atom_coords
         n, a, c = coords.shape
-        bb_coords, bb_mask = self.get_atom_coords_n_masks(atom_tys=["N", "CA", "C"], coords=coords)
-        cb_mask, cb_coords = torch.all(bb_mask, dim=-1), torch.zeros(n, 1, 3, device=coords.device)
+        bb_coords, bb_mask = self.get_atom_coords_n_masks(
+            atom_tys=["N", "CA", "C"], coords=coords
+        )
+        cb_mask, cb_coords = torch.all(bb_mask, dim=-1), torch.zeros(
+            n, 1, 3, device=coords.device
+        )
         # gly_mask = torch.tensor([1 if s != "G" else 0 for s in self.seq]).bool()
         # cb_mask = cb_mask & gly_mask
         cb_coords[cb_mask] = impute_beta_carbon(bb_coords[cb_mask]).unsqueeze(-2)
         if override:
-            self.add_atoms(cb_coords, cb_mask.unsqueeze(-1), ["CB"], exists_ok=exists_ok)
+            self.add_atoms(
+                cb_coords, cb_mask.unsqueeze(-1), ["CB"], exists_ok=exists_ok
+            )
         return cb_coords, cb_mask.unsqueeze(-1)
 
     def add_atoms(
-        self, atom_coords: Tensor, atom_masks: Tensor, atom_tys: List[str], exists_ok: bool = False
+        self,
+        atom_coords: Tensor,
+        atom_masks: Tensor,
+        atom_tys: List[str],
+        exists_ok: bool = False,
     ) -> Protein:
         """Add atoms and respective coordinates to the protein"""
         atom_exists = any([atom_ty in self.atom_tys for atom_ty in atom_tys])
         if not exists_ok:
             assert not atom_exists
-        assert atom_coords.ndim == self.atom_coords.ndim, f"{atom_coords.shape},{self.atom_coords.shape}"
-        assert atom_masks.ndim == self.atom_masks.ndim, f"{atom_masks.shape},{self.atom_masks.shape}"
-        assert atom_masks.shape[0] == self.atom_masks.shape[0], f"{atom_masks.shape[0]},{self.atom_masks.shape}"
-        assert atom_coords.shape[0] == self.atom_coords.shape[0], f"{atom_coords.shape}, {self.atom_coords.shape}"
+        assert (
+            atom_coords.ndim == self.atom_coords.ndim
+        ), f"{atom_coords.shape},{self.atom_coords.shape}"
+        assert (
+            atom_masks.ndim == self.atom_masks.ndim
+        ), f"{atom_masks.shape},{self.atom_masks.shape}"
+        assert (
+            atom_masks.shape[0] == self.atom_masks.shape[0]
+        ), f"{atom_masks.shape[0]},{self.atom_masks.shape}"
+        assert (
+            atom_coords.shape[0] == self.atom_coords.shape[0]
+        ), f"{atom_coords.shape}, {self.atom_coords.shape}"
 
         new_atom_tys, curr_atom_tys = [x for x in self.atom_tys], self.atom_ty_set
-        new_coords, new_masks = torch.clone(self.atom_coords), torch.clone(self.atom_masks)
+        new_coords, new_masks = torch.clone(self.atom_coords), torch.clone(
+            self.atom_masks
+        )
         for i, atom in enumerate(atom_tys):
             if atom in curr_atom_tys:
                 atom_pos = self.atom_positions[atom]
@@ -622,8 +705,12 @@ class Protein:
                 new_masks[..., atom_pos] = atom_masks[..., i]
             else:
                 new_atom_tys.append(atom)
-                new_coords = torch.cat((new_coords, atom_coords[..., i, :].unsqueeze(-2)), dim=-2)
-                new_masks = torch.cat((new_masks, atom_masks[..., i].unsqueeze(-1)), dim=-1)
+                new_coords = torch.cat(
+                    (new_coords, atom_coords[..., i, :].unsqueeze(-2)), dim=-2
+                )
+                new_masks = torch.cat(
+                    (new_masks, atom_masks[..., i].unsqueeze(-1)), dim=-1
+                )
 
         self.atom_coords = new_coords
         self.atom_masks = new_masks
@@ -638,7 +725,9 @@ class Protein:
         chain_idxs = [self.chain_indices[i] for i in order]
         res_ids = [self.res_ids[i] for i in order]
         tensors = (self.atom_coords, self.atom_masks, self.chain_ids)
-        out = map(lambda x: torch.cat([x[cidxs] for cidxs in chain_idxs], dim=0), tensors)
+        out = map(
+            lambda x: torch.cat([x[cidxs] for cidxs in chain_idxs], dim=0), tensors
+        )
         atom_coords, atom_masks, chain_ids = out
         idx_order = torch.cat(chain_idxs, dim=0).detach().cpu().numpy()
         seq = "".join([self.seq[i] for i in idx_order])
@@ -676,7 +765,11 @@ class Protein:
             self.atom_coords[..., atom_idx, :] = coords[..., i, :]
 
     def __clear_cache__(self):
-        cache_keys = [name for name, value in inspect.getmembers(Protein) if isinstance(value, cached_property)]
+        cache_keys = [
+            name
+            for name, value in inspect.getmembers(Protein)
+            if isinstance(value, cached_property)
+        ]
         for key in cache_keys:
             if key in self.__dict__:
                 del self.__dict__[key]
@@ -696,7 +789,10 @@ class Protein:
         mask = torch.zeros(len(self))
         mask[full_indices] = 1
         split_mask = [mask[: len(self.res_ids[0])], mask[len(self.res_ids[0]) :]]
-        chain_indices = [torch.arange(len(i1)), torch.arange(len(i1), len(i1) + len(i2))]
+        chain_indices = [
+            torch.arange(len(i1)),
+            torch.arange(len(i1), len(i1) + len(i2)),
+        ]
         res_ids = [self.res_ids[i][split_mask[i].bool()] for i in range(2)]
         assert sum(map(len, res_ids)) == sum(map(len, indices))
         assert sum(map(len, chain_indices)) == sum(map(len, indices))
@@ -725,7 +821,9 @@ class Protein:
         atom_coords = torch.cat((self.atom_coords, other.atom_coords), dim=0)
         atom_masks = torch.cat((self.atom_masks, other.atom_masks), dim=0)
         res_ids = self.res_ids + other.res_ids
-        chain_ids = torch.cat((self.chain_ids, (self.n_chains + 1) * torch.ones(len(other))))
+        chain_ids = torch.cat(
+            (self.chain_ids, (self.n_chains + 1) * torch.ones(len(other)))
+        )
         chain_indices = self.chain_indices + [len(self) + torch.arange(len(other))]
         sec_struct = None
         if exists(self.sec_struct) and exists(other.sec_struct):
@@ -793,9 +891,13 @@ class Protein:
         )
 
 
-def safe_load_sequence(seq_path: Optional[str], pdb_path: str, ignore_non_std: bool = True) -> str:
+def safe_load_sequence(
+    seq_path: Optional[str], pdb_path: str, ignore_non_std: bool = True
+) -> str:
     """Loads sequence, either from fasta or given pdb file"""
     if exists(seq_path):
         return load_fasta_file(seq_path)
-    pdbseqs, residueLists, chains = extract_pdb_seq_from_pdb_file(pdb_path, ignore_non_standard=ignore_non_std)
+    pdbseqs, residueLists, chains = extract_pdb_seq_from_pdb_file(
+        pdb_path, ignore_non_standard=ignore_non_std
+    )
     return pdbseqs[0]

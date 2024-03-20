@@ -1,35 +1,35 @@
 """Evoformer Config"""
-from typing import Optional
+from typing import Optional, Tuple
+
 from protein_learning.networks.common.utils import default
 from protein_learning.networks.config.net_config import NetConfig
-from typing import Tuple
 
 
 class EvoformerConfig(NetConfig):
     """Evoformer configuration"""
 
     def __init__(
-            self,
-            node_dim: int,
-            edge_dim: int,
-            node_dim_out: Optional[int] = None,
-            edge_dim_out: Optional[int] = None,
-            do_tri_attn: bool = True,
-            do_tri_mul: bool = True,
-            depth: int = 10,
-            node_dropout: float = 0,
-            edge_dropout: float = 0,
-            edge_attn_heads: int = 4,
-            edge_dim_head: int = 32,
-            triangle_mul_dim: Optional[int] = None,
-            outer_prod_dim: int = 16,
-            node_attn_heads: int = 12,
-            use_nbr_attn: bool = False,
-            node_dim_head: int = 20,
-            checkpoint: bool = True,
-            project_out: bool = False,
-            node_ff_mult: int = 4,
-            edge_ff_mult: int = 2,
+        self,
+        node_dim: int,
+        edge_dim: int,
+        node_dim_out: Optional[int] = None,
+        edge_dim_out: Optional[int] = None,
+        do_tri_attn: bool = True,
+        do_tri_mul: bool = True,
+        depth: int = 10,
+        node_dropout: float = 0,
+        edge_dropout: float = 0,
+        edge_attn_heads: int = 4,
+        edge_dim_head: int = 32,
+        triangle_mul_dim: Optional[int] = None,
+        outer_prod_dim: int = 16,
+        node_attn_heads: int = 12,
+        use_nbr_attn: bool = False,
+        node_dim_head: int = 20,
+        checkpoint: bool = True,
+        project_out: bool = False,
+        node_ff_mult: int = 4,
+        edge_ff_mult: int = 2,
     ):
         super(EvoformerConfig, self).__init__()
         self.node_dim = node_dim

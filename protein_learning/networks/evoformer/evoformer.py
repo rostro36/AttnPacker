@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 import torch
 import torch.nn.functional as F  # noqa
 from einops import rearrange, repeat  # noqa
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 from protein_learning.common.global_constants import get_logger
 from protein_learning.networks.attention.node_attention import NodeUpdateBlock
@@ -13,7 +13,9 @@ from protein_learning.networks.evoformer.evoformer_config import EvoformerConfig
 
 logger = get_logger(__name__)
 TorchList = nn.ModuleList  # noqa
-Proj = lambda dim_in, dim_out: nn.Sequential(nn.LayerNorm(dim_in), nn.Linear(dim_in, dim_out))
+Proj = lambda dim_in, dim_out: nn.Sequential(
+    nn.LayerNorm(dim_in), nn.Linear(dim_in, dim_out)
+)
 
 
 class Evoformer(nn.Module):  # noqa
@@ -26,23 +28,31 @@ class Evoformer(nn.Module):  # noqa
         edge_in, edge_hidden, edge_out = config.pair_dims
 
         # Input/Output projections
-        self.node_project_out = Proj(node_hidden, node_out) if config.project_out else nn.Identity()
-        self.edge_project_out = Proj(edge_hidden, edge_out) if config.project_out else nn.Identity()
+        self.node_project_out = (
+            Proj(node_hidden, node_out) if config.project_out else nn.Identity()
+        )
+        self.edge_project_out = (
+            Proj(edge_hidden, edge_out) if config.project_out else nn.Identity()
+        )
         self.layers = get_transformer_layers(config)
         _freeze(self.layers, freeze)
 
     def forward(
-            self,
-            node_feats: torch.Tensor,
-            edge_feats: torch.Tensor,
-            adj_mask: Optional[Tensor] = None,
+        self,
+        node_feats: torch.Tensor,
+        edge_feats: torch.Tensor,
+        adj_mask: Optional[Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Run EvoFormer Forward Pass"""
 
         for layer, (node_block, edge_block) in enumerate(self.layers):
             # node to node attention (with edge bias)
-            node_feats = node_block(node_feats=node_feats, pair_feats=edge_feats, mask=adj_mask)
-            edge_feats = edge_block(node_feats=node_feats, pair_feats=edge_feats, mask=adj_mask)
+            node_feats = node_block(
+                node_feats=node_feats, pair_feats=edge_feats, mask=adj_mask
+            )
+            edge_feats = edge_block(
+                node_feats=node_feats, pair_feats=edge_feats, mask=adj_mask
+            )
         return self.node_project_out(node_feats), self.edge_project_out(edge_feats)
 
 
@@ -64,7 +74,6 @@ def get_transformer_layers(config: EvoformerConfig):
                         dim_out=node_hidden,
                         heads=config.node_attn_heads,
                         dim_head=config.node_dim_head,
-
                     ),
                     PairUpdateBlock(
                         pair_dim=pair_hidden,
@@ -77,7 +86,7 @@ def get_transformer_layers(config: EvoformerConfig):
                         ff_mult=config.edge_ff_mult,
                         do_tri_mul=config.do_tri_mul,
                         do_tri_attn=config.do_tri_attn,
-                    )
+                    ),
                 ]
             )
         )
@@ -89,8 +98,7 @@ def _freeze(layers: TorchList, freeze: bool):
     """Freeze parameters in all but final layer"""
     if not freeze:
         return
-    print(f"[INFO] Freezing evoformer layers"
-          f"1-{len(layers) - 1} (of {len(layers)})")
+    print(f"[INFO] Freezing evoformer layers" f"1-{len(layers) - 1} (of {len(layers)})")
     for layer in layers[:-1]:  # noqa
         for module in layer:
             for param in module.parameters():

@@ -1,10 +1,11 @@
 """Config class for Geometric GT"""
 from argparse import Namespace
-from typing import Union, List, NamedTuple, Dict, Any
+from typing import Any, Dict, List, NamedTuple, Union
 
 
 class GeomGTConfig(NamedTuple):
     """Graph Transformer config"""
+
     node_dim: int
     pair_dim: int
     depth: int
@@ -16,9 +17,9 @@ class GeomGTConfig(NamedTuple):
 
 
 def get_configs(
-        node_dim: int,
-        pair_dim: int,
-        opts: Namespace,
+    node_dim: int,
+    pair_dim: int,
+    opts: Namespace,
 ) -> Union[GeomGTConfig, List[GeomGTConfig]]:
     depth = opts.depth
     share_weights = list(map(bool, opts.share_weights))
@@ -32,7 +33,7 @@ def get_configs(
         dim_value=opts.node_dim_value[i],
         dim_query_point=opts.node_dim_query_point[i],
         dim_value_point=opts.node_dim_value_point[i],
-        use_dist_attn=bool(opts.use_dist_attn[i])
+        use_dist_attn=bool(opts.use_dist_attn[i]),
     )
 
     pair_kwargs = lambda i: dict(
@@ -41,7 +42,7 @@ def get_configs(
         dim_head=opts.pair_dim_head[i],
         do_tri_mul=bool(opts.do_tri_mul[i]),
         do_tri_attn=bool(opts.do_tri_attn[i]),
-        do_pair_outer=bool(opts.do_pair_outer[i])
+        do_pair_outer=bool(opts.do_pair_outer[i]),
     )
 
     gtc = lambda i: GeomGTConfig(
@@ -52,7 +53,7 @@ def get_configs(
         node_update_kwargs=node_kwargs(i),
         pair_update_kwargs=pair_kwargs(i),
         share_weights=share_weights[i],
-        scale_rigid_update=opts.scale_rigid_update
+        scale_rigid_update=opts.scale_rigid_update,
     )
 
     if len(depth) > 1:

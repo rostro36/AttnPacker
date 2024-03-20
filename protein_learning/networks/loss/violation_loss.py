@@ -5,28 +5,24 @@
 (3) BackboneAngleDeviationLoss
 """
 import math
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 import torch
 import torch.nn.functional as F  # noqa
-from einops import repeat, rearrange  # noqa
-from torch import nn, Tensor
+from einops import rearrange, repeat  # noqa
+from torch import Tensor, nn
 
 from protein_learning.common.protein_constants import (
     ALL_ATOM_POSNS,
     ALL_ATOM_VDW_RADII,
-    BOND_ANGLES,
-    BOND_LENS,
-    BOND_LEN_TOL,
-    BOND_ANGLE_TOL,
-    BOND_LEN_OFFSET,
     BOND_ANGLE_OFFSET,
+    BOND_ANGLE_TOL,
+    BOND_ANGLES,
+    BOND_LEN_OFFSET,
+    BOND_LEN_TOL,
+    BOND_LENS,
 )
-from protein_learning.networks.loss.utils import (
-    outer_sum,
-    outer_prod,
-    to_rel_coord,
-)
+from protein_learning.networks.loss.utils import outer_prod, outer_sum, to_rel_coord
 
 
 def masked_mean(tensor, mask, dim=-1, keepdim=False):
@@ -36,10 +32,10 @@ def masked_mean(tensor, mask, dim=-1, keepdim=False):
     mask = mask.bool() if mask.dtype != torch.bool else mask
     diff_len = len(tensor.shape) - len(mask.shape)
     mask = mask[(..., *((None,) * diff_len))]  # noqa
-    tensor.masked_fill_(~mask, 0.)
+    tensor.masked_fill_(~mask, 0.0)
     total_el = mask.sum(dim=dim, keepdim=keepdim)
-    mean = tensor.sum(dim=dim, keepdim=keepdim) / total_el.clamp(min=1.)
-    mean.masked_fill_(total_el == 0, 0.)
+    mean = tensor.sum(dim=dim, keepdim=keepdim) / total_el.clamp(min=1.0)
+    mean.masked_fill_(total_el == 0, 0.0)
     return mean
 
 
@@ -67,8 +63,7 @@ def _init_table() -> Tensor:
 
 
 def _compute_atom_ty_mapping(
-        atom_ty_order: Dict[str, int],
-        device: Any = "cpu"
+    atom_ty_order: Dict[str, int], device: Any = "cpu"
 ) -> Tensor:
     """Given a mapping from atom type to atom position, computes a mapping
     from the given atom type order to the implicit atom type order used by
@@ -120,12 +115,12 @@ class InterResidueVDWRepulsiveLoss(nn.Module):
         return repeat(self._vdw_table[mapping], "i-> b n i", b=b, n=n)
 
     def forward(
-            self,
-            atom_coords: Tensor,
-            atom_ty_order: Optional[Dict[str, int]] = None,
-            atom_coord_mask: Optional[Tensor] = None,
-            reduce: bool = True,
-            reduce_mean=True,
+        self,
+        atom_coords: Tensor,
+        atom_ty_order: Optional[Dict[str, int]] = None,
+        atom_coord_mask: Optional[Tensor] = None,
+        reduce: bool = True,
+        reduce_mean=True,
     ) -> Tensor:
         """Compute Van Der Waals repulsize loss
 
@@ -162,7 +157,9 @@ class InterResidueVDWRepulsiveLoss(nn.Module):
         atom_dists = safe_norm(to_rel_coord(rel_atom_coords), dim=-1)
 
         # compute vdw sums between valid atom pairs
-        vdw_radii = rearrange(self.vdw_table(coords=atom_coords, mapping=mapping), "b n i -> b (n i)")
+        vdw_radii = rearrange(
+            self.vdw_table(coords=atom_coords, mapping=mapping), "b n i -> b (n i)"
+        )
         vdw_sums = outer_sum(vdw_radii)
         # determine volations
         violations = F.relu(vdw_sums + self.tol - atom_dists)
@@ -192,11 +189,11 @@ class BackboneBondLenDeviationLoss(nn.Module):
     """
 
     def __init__(
-            self,
-            include_c_n_bond: bool = True,
-            include_n_ca_bond: bool = True,
-            include_ca_c_bond: bool = True,
-            include_ca_ca_pseudo_bond: bool = True,
+        self,
+        include_c_n_bond: bool = True,
+        include_n_ca_bond: bool = True,
+        include_ca_c_bond: bool = True,
+        include_ca_ca_pseudo_bond: bool = True,
     ):
         """
         :param include_c_n_bond: whether peptide bond length deviations should be included
@@ -224,12 +221,12 @@ class BackboneBondLenDeviationLoss(nn.Module):
         self.tols.append(BOND_LEN_TOL[key] ** 2)
 
     def forward(
-            self,
-            atom_coords: Tensor,
-            atom_ty_order: Optional[Dict[str, int]] = None,
-            atom_coord_mask: Optional[Tensor] = None,
-            residue_indices: Optional[Tensor] = None,
-            bonded_mask: Optional[Tensor] = None,
+        self,
+        atom_coords: Tensor,
+        atom_ty_order: Optional[Dict[str, int]] = None,
+        atom_coord_mask: Optional[Tensor] = None,
+        residue_indices: Optional[Tensor] = None,
+        bonded_mask: Optional[Tensor] = None,
     ):
         """Compute bond length (squared) deviation loss
 
@@ -252,21 +249,34 @@ class BackboneBondLenDeviationLoss(nn.Module):
             # compute loss for specific atom pair
             first_idx, second_idx = map(lambda a: atom_ty_order[a], self.atom_tys[idx])
             valid_mask = torch.ones(b, n - offset, device=atom_coords.device).bool()
-            first_atoms, second_atoms = atom_coords[:, :, first_idx], atom_coords[:, :, second_idx]
+            first_atoms, second_atoms = (
+                atom_coords[:, :, first_idx],
+                atom_coords[:, :, second_idx],
+            )
             if offset == 1:
                 deviations = safe_norm(first_atoms[:, :-1] - second_atoms[:, 1:])
                 if exists(residue_indices):
-                    valid_mask = valid_mask & ((residue_indices[:, 1:] - residue_indices[:, :-1]) <= 1)
+                    valid_mask = valid_mask & (
+                        (residue_indices[:, 1:] - residue_indices[:, :-1]) <= 1
+                    )
                 if exists(atom_coord_mask):
-                    valid_mask = valid_mask & (atom_coord_mask[:, :-1, first_idx] & atom_coord_mask[:, 1:, second_idx])
+                    valid_mask = valid_mask & (
+                        atom_coord_mask[:, :-1, first_idx]
+                        & atom_coord_mask[:, 1:, second_idx]
+                    )
                 if exists(bonded_mask):
                     valid_mask = bonded_mask & valid_mask
             else:
                 deviations = safe_norm(first_atoms - second_atoms)
                 if exists(atom_coord_mask):
-                    valid_mask = valid_mask & (atom_coord_mask[..., first_idx] & atom_coord_mask[..., second_idx])
+                    valid_mask = valid_mask & (
+                        atom_coord_mask[..., first_idx]
+                        & atom_coord_mask[..., second_idx]
+                    )
 
-            deviation = F.relu(torch.square(deviations - self.ideal_lens[idx]) - self.tols[idx])
+            deviation = F.relu(
+                torch.square(deviations - self.ideal_lens[idx]) - self.tols[idx]
+            )
             deviation[deviation > 0] = torch.sqrt(deviation[deviation > 0])
             loss = loss + masked_mean(deviation, valid_mask, dim=-1)
 
@@ -290,10 +300,10 @@ class BackboneAngleDeviationLoss(nn.Module):
     """
 
     def __init__(
-            self,
-            include_n_ca_c_angle: bool = True,
-            include_ca_c_n_angle: bool = True,
-            include_c_n_ca_bond: bool = True,
+        self,
+        include_n_ca_c_angle: bool = True,
+        include_ca_c_n_angle: bool = True,
+        include_c_n_ca_bond: bool = True,
     ):
         super(BackboneAngleDeviationLoss, self).__init__()
         self.atom_tys = []
@@ -313,12 +323,12 @@ class BackboneAngleDeviationLoss(nn.Module):
         self.tols.append((BOND_ANGLE_TOL[key] * math.pi / 180) ** 2)
 
     def forward(
-            self,
-            atom_coords: Tensor,
-            atom_ty_order: Optional[Dict[str, int]] = None,
-            atom_coord_mask: Optional[Tensor] = None,
-            residue_indices: Optional[Tensor] = None,
-            bonded_mask: Optional[Tensor] = None,
+        self,
+        atom_coords: Tensor,
+        atom_ty_order: Optional[Dict[str, int]] = None,
+        atom_coord_mask: Optional[Tensor] = None,
+        residue_indices: Optional[Tensor] = None,
+        bonded_mask: Optional[Tensor] = None,
     ):
         """Compute bond length (squared) deviation loss
 
@@ -341,29 +351,48 @@ class BackboneAngleDeviationLoss(nn.Module):
             i1, i2, i3 = map(lambda a: atom_ty_order[a], self.atom_tys[idx])
             # mask to apply to loss
             has_offset = any((o1, o2, o3))
-            valid_mask = torch.ones(b, n - int(has_offset), device=atom_coords.device).bool()
-            m1, m2, m3 = map(lambda i: atom_coord_mask[:, :, i], (i1, i2, i3)) if \
-                exists(atom_coord_mask) else [None] * 3
+            valid_mask = torch.ones(
+                b, n - int(has_offset), device=atom_coords.device
+            ).bool()
+            m1, m2, m3 = (
+                map(lambda i: atom_coord_mask[:, :, i], (i1, i2, i3))
+                if exists(atom_coord_mask)
+                else [None] * 3
+            )
 
             # coordinates for each atom type
             a1, a2, a3 = map(lambda i: atom_coords[:, :, i], (i1, i2, i3))
             if has_offset:
-                a1, a2, a3 = map(lambda x: x[0][:, 1:] if x[1] else x[0][:, :-1], [(a1, o1), (a2, o2), (a3, o3)])
+                a1, a2, a3 = map(
+                    lambda x: x[0][:, 1:] if x[1] else x[0][:, :-1],
+                    [(a1, o1), (a2, o2), (a3, o3)],
+                )
                 if exists(atom_coord_mask):
-                    m1, m2, m3 = map(lambda x: x[0][:, 1:] if x[1] else x[0][:, :-1], [(m1, o1), (m2, o2), (m3, o3)])
+                    m1, m2, m3 = map(
+                        lambda x: x[0][:, 1:] if x[1] else x[0][:, :-1],
+                        [(m1, o1), (m2, o2), (m3, o3)],
+                    )
                     valid_mask = valid_mask & m1 & m2 & m3
                 if exists(residue_indices):
-                    valid_mask = valid_mask & ((residue_indices[:, 1:] - residue_indices[:, :-1]) <= 1)
+                    valid_mask = valid_mask & (
+                        (residue_indices[:, 1:] - residue_indices[:, :-1]) <= 1
+                    )
                 if exists(bonded_mask):
                     valid_mask = bonded_mask & valid_mask
             else:
                 if exists(atom_coord_mask):
                     valid_mask = valid_mask & m1 & m2 & m3
 
-            b01, b02 = map(lambda x: x / safe_norm(x, dim=-1, keepdim=True), (a1 - a2, a3 - a2))
+            b01, b02 = map(
+                lambda x: x / safe_norm(x, dim=-1, keepdim=True), (a1 - a2, a3 - a2)
+            )
             cos_theta = torch.clamp(torch.sum(b01 * b02, dim=-1), -1, 1)
-            ideal_angles = torch.abs((torch.ones_like(cos_theta) * self.ideal_angles[idx])) * torch.sign(cos_theta)
-            dev = F.relu(torch.square(cos_theta - ideal_angles.detach()) - self.tols[idx])
+            ideal_angles = torch.abs(
+                (torch.ones_like(cos_theta) * self.ideal_angles[idx])
+            ) * torch.sign(cos_theta)
+            dev = F.relu(
+                torch.square(cos_theta - ideal_angles.detach()) - self.tols[idx]
+            )
             angle_loss = masked_mean(dev, valid_mask, dim=-1)
             loss = loss + (angle_loss if angle_loss > 0 else 0)
 
@@ -376,12 +405,15 @@ class IntraResidueDistance(nn.Module):
         super(IntraResidueDistance, self).__init__()
 
     def forward(self, predicted_coords, actual_coords, valid_res_mask, atom_mask):
-        to_intra_dists = lambda x: safe_norm(rearrange("b n a c -> b n a () c") -
-                                             rearrange("b n a c -> b n () a c"),
-                                             dim=-1)
+        to_intra_dists = lambda x: safe_norm(
+            rearrange("b n a c -> b n a () c") - rearrange("b n a c -> b n () a c"),
+            dim=-1,
+        )
         atom_mask = atom_mask.float()
         intra_mask = torch.einsum("b n i, b n j -> b n i j", atom_mask, atom_mask)
         intra_mask[~valid_res_mask] = 0
-        deviations = torch.square(to_intra_dists(predicted_coords) - to_intra_dists(actual_coords))
+        deviations = torch.square(
+            to_intra_dists(predicted_coords) - to_intra_dists(actual_coords)
+        )
         loss = torch.sum(deviations * intra_mask, dim=(-1, -2))
         totals = torch.clamp_min(torch.sum(intra_mask, dim=(-1, -2)), 1)

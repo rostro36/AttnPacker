@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-from typing import Tuple, Any
+from typing import Any, Tuple
 
 import torch
 from einops import rearrange  # noqa
-from scp_postprocess.transforms import (  # noqa
-    quaternion_to_matrix,  # noqa
-    matrix_to_quaternion,  # noqa
-    quaternion_invert,  # noqa
-    quaternion_apply,  # noqa
-)
 from torch import Tensor
 
 from scp_postprocess.helpers import safe_normalize
+from scp_postprocess.transforms import matrix_to_quaternion  # noqa
+from scp_postprocess.transforms import quaternion_apply  # noqa
+from scp_postprocess.transforms import quaternion_invert  # noqa
+from scp_postprocess.transforms import quaternion_to_matrix  # noqa; noqa
 
 rot_mul_vec = lambda x, y: torch.einsum("... i j, ... j -> ... i", x, y)
 
@@ -36,13 +34,17 @@ class Rigids:
         """Concatenate other to this rigid"""
         cat_dim = 1 if self.translations.ndim == 3 else 0
         self.quaternions = torch.cat((self.quaternions, other.quaternions), dim=cat_dim)
-        self.translations = torch.cat((self.translations, other.translations), dim=cat_dim)
+        self.translations = torch.cat(
+            (self.translations, other.translations), dim=cat_dim
+        )
         return self
 
     def mask(self, mask: Tensor) -> Rigids:
         """Mask over translations and quaternions"""
         assert mask.shape[0] == self.quaternions.shape[0]
-        identity = self.IdentityRigid(self.quaternions.shape[:2], device=self.quaternions.device)
+        identity = self.IdentityRigid(
+            self.quaternions.shape[:2], device=self.quaternions.device
+        )
         self.quaternions[mask] = identity.quaternions[mask]
         self.translations[mask] = identity.translations[mask]
         return self
@@ -111,7 +113,9 @@ class Rigids:
         return Rigids(self.quaternions, self.translations * factor)
 
     @classmethod
-    def IdentityRigid(cls, leading_shape: Tuple[int, ...], device: Any = "cpu") -> Rigids:
+    def IdentityRigid(
+        cls, leading_shape: Tuple[int, ...], device: Any = "cpu"
+    ) -> Rigids:
         """Rigid transformation representing identity (no transform)
         :param leading_shape: (b,n) or (n,)
         :param device: device to place translation/rotation tensors on
@@ -138,7 +142,9 @@ class Rigids:
     @classmethod
     def RididFromRotNTrans(cls, rotations: Tensor, translations: Tensor) -> Rigids:
         """Get a rigid transformation for rotations and translations"""
-        return cls(quaternions=matrix_to_quaternion(rotations), translations=translations)
+        return cls(
+            quaternions=matrix_to_quaternion(rotations), translations=translations
+        )
 
     def crop(self, start: int, end: int) -> Rigids:
         """crop rigids from start : end"""

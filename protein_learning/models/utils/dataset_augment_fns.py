@@ -2,9 +2,7 @@ from typing import Tuple
 
 from protein_learning.common.data.data_types.protein import Protein
 from protein_learning.common.helpers import exists
-from protein_learning.features.masking.partition import (
-    ChainPartitionGenerator,
-)
+from protein_learning.features.masking.partition import ChainPartitionGenerator
 
 
 def impute_cb(decoy: Protein, native: Protein) -> Tuple[Protein, Protein]:
@@ -14,7 +12,7 @@ def impute_cb(decoy: Protein, native: Protein) -> Tuple[Protein, Protein]:
 
 
 def partition_chain(
-        decoy: Protein, native: Protein, partition_gen: ChainPartitionGenerator = None
+    decoy: Protein, native: Protein, partition_gen: ChainPartitionGenerator = None
 ) -> Tuple[Protein, Protein]:
     """Partition a chain to appear as a complex"""
     assert exists(partition_gen)

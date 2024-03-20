@@ -11,16 +11,14 @@ from typing import List
 
 from protein_learning.common.protein_constants import ALL_ATOMS
 from protein_learning.features.input_embedding import InputEmbedding
-from protein_learning.features.masking.partition import (
-    ChainPartitionGenerator,
-)
-from protein_learning.models.utils.feature_flags import FeatureFlagGen
+from protein_learning.features.masking.partition import ChainPartitionGenerator
 from protein_learning.models.model_abc.train import TrainABC
 from protein_learning.models.utils.dataset_augment_fns import impute_cb, partition_chain
+from protein_learning.models.utils.feature_flags import FeatureFlagGen
 
 # from protein_learning.models.utils.esm_embedder import ESMInputEmbedder
 # from protein_learning.models.utils.esm_input import ESMFeatGen
-from protein_learning.models.utils.opt_parse import add_flag_args, add_esm_options
+from protein_learning.models.utils.opt_parse import add_esm_options, add_flag_args
 
 
 class TrainDesign(TrainABC):
@@ -129,7 +127,11 @@ class TrainDesign(TrainABC):
         return self.flag_gen.flag_dims[1] if self.flag_gen is not None else 0
 
     def _setup(self):
-        self.flag_gen = FeatureFlagGen(**vars(self.arg_groups["flag_args"])) if self.use_flags else None
+        self.flag_gen = (
+            FeatureFlagGen(**vars(self.arg_groups["flag_args"]))
+            if self.use_flags
+            else None
+        )
         self.partition_gen = None
         if self.args.partition_chains:
             self.partition_gen = ChainPartitionGenerator(
@@ -158,7 +160,9 @@ class TrainDesign(TrainABC):
     def dataset_transform_fn(self):
         """Transform native and decoy input"""
         return partial(
-            _transform, partition_gen=self.partition_gen, train_on_bounded=self.args.train_on_bounded_complex
+            _transform,
+            partition_gen=self.partition_gen,
+            train_on_bounded=self.args.train_on_bounded_complex,
         )
 
     @property

@@ -1,6 +1,6 @@
 import time
 from contextlib import contextmanager
-from typing import Optional, Tuple, Any, Union
+from typing import Any, Optional, Tuple, Union
 
 import torch
 from einops import rearrange  # noqa
@@ -19,7 +19,12 @@ def maybe_add_batch(x: Tensor, unbatched_dim: int) -> Tensor:
     return x.unsqueeze(0) if x.ndim == unbatched_dim else x
 
 
-def safe_norm(x: Tensor, dim: Union[int, Tuple[int, ...]], keepdim: bool = False, eps: float = 1e-12):
+def safe_norm(
+    x: Tensor,
+    dim: Union[int, Tuple[int, ...]],
+    keepdim: bool = False,
+    eps: float = 1e-12,
+):
     """Safe norm of a vector"""
     return torch.sqrt(torch.sum(torch.square(x), dim=dim, keepdim=keepdim) + eps)
 
@@ -46,11 +51,16 @@ def res_labels_to_seq(res_labels: Tensor) -> str:
 
 
 def k_spatial_nearest_neighbors(
-    points: Tensor, idx: int, top_k: int, max_dist: Optional[float] = None, include_self: bool = False
+    points: Tensor,
+    idx: int,
+    top_k: int,
+    max_dist: Optional[float] = None,
+    include_self: bool = False,
 ) -> Tensor:
     """Get k nearest neighbors for point at index idx"""
     assert points.ndim == 2, (
-        f"this function expects coordinate of shape (n,3) - " f"does not work for batched coordinates"
+        f"this function expects coordinate of shape (n,3) - "
+        f"does not work for batched coordinates"
     )
     diffs = points - rearrange(points[idx], "c -> () c")
     dists = safe_norm(diffs, dim=-1)
@@ -135,7 +145,10 @@ def batched_index_select(values: Tensor, indices: Tensor, dim: int = 1) -> Tenso
     :param dim: the dimension to select from
     :return: tensor with selected (or sub-selected) values according to indices.
     """
-    assert dim >= 0, f"ERROR: batched index selection requires dim argument to be " f"non-negative!, got {dim}"
+    assert dim >= 0, (
+        f"ERROR: batched index selection requires dim argument to be "
+        f"non-negative!, got {dim}"
+    )
     value_dims = values.shape[(dim + 1) :]
     values_shape, indices_shape = map(lambda t: list(t.shape), (values, indices))
     indices = indices[(..., *((None,) * len(value_dims)))]
@@ -179,4 +192,6 @@ def coords_to_rel_coords(coords: Tensor) -> Tensor:
     """Map from coordinates coords[...,i] = x_i in R^k to relative coordinates
     rel_coords[...,i,j] = x_j-x_i in R^k
     """
-    return rearrange(coords, "... n c -> ... () n c") - rearrange(coords, "... n c -> ... n () c")  # noqa
+    return rearrange(coords, "... n c -> ... () n c") - rearrange(
+        coords, "... n c -> ... n () c"
+    )  # noqa

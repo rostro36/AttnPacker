@@ -1,6 +1,6 @@
 """Input Feature Embedding
 """
-from typing import Tuple, Optional, List, Union, Dict
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 from einops import rearrange, repeat  # noqa
@@ -8,15 +8,15 @@ from torch import Tensor, nn
 from torch.nn.functional import one_hot as to_one_hot
 
 from protein_learning.common.global_constants import get_logger
-from protein_learning.common.helpers import exists, default
+from protein_learning.common.helpers import default, exists
 from protein_learning.common.protein_constants import AA_ALPHABET
 from protein_learning.features.feature import Feature
 from protein_learning.features.feature_config import (
-    InputFeatureConfig,
-    FeatureTy,
-    FeatureName,
-    FeatureEmbeddingTy,
     FEATURE_NAMES,
+    FeatureEmbeddingTy,
+    FeatureName,
+    FeatureTy,
+    InputFeatureConfig,
 )
 from protein_learning.features.feature_utils import fourier_encode
 from protein_learning.features.input_features import InputFeatures
@@ -70,7 +70,9 @@ class FeatEmbedding(nn.Module):  # noqa
         min_token = torch.min(to_emb + self.get_offsets(to_emb))
         expected_max_token = self.mult * self.num_classes
         assert min_token >= 0, f"{feat.name}:{max_token},{expected_max_token}"
-        assert max_token < expected_max_token, f"{feat.name}:{max_token},{expected_max_token}"
+        assert (
+            max_token < expected_max_token
+        ), f"{feat.name}:{max_token},{expected_max_token}"
         return self.embedding(to_emb + self.get_offsets(to_emb))
 
 
@@ -97,8 +99,12 @@ class FeatOneHotEncoding(nn.Module):  # noqa
         """One hot encode the features"""
         to_hot = feat.get_encoded_data()
         assert to_hot.shape[-1] == self.mult, f"{to_hot.shape},{self.mult},{feat.name}"
-        assert torch.min(to_hot) >= 0, f"{feat.name}:{torch.min(to_hot)},{self.num_classes}"
-        assert torch.max(to_hot) < self.num_classes, f"{feat.name}:{torch.max(to_hot)},{self.num_classes}"
+        assert (
+            torch.min(to_hot) >= 0
+        ), f"{feat.name}:{torch.min(to_hot)},{self.num_classes}"
+        assert (
+            torch.max(to_hot) < self.num_classes
+        ), f"{feat.name}:{torch.max(to_hot)},{self.num_classes}"
         encoding = to_one_hot(to_hot, self.num_classes)
         return encoding + torch.randn_like(encoding.float()) * self.std_noise
 
@@ -118,11 +124,15 @@ class RBFEncoding(nn.Module):  # noqa
     def forward(self, feat: Feature):
         """RBF - encode the features"""
         raw_data = feat.get_raw_data()
-        assert raw_data.shape[-1] == self.mult, f"{raw_data.shape},{self.mult},{feat.name}"
+        assert (
+            raw_data.shape[-1] == self.mult
+        ), f"{raw_data.shape},{self.mult},{feat.name}"
         raw_data = raw_data.unsqueeze(-1)
         shape_diff = raw_data.ndim - self.radii.ndim
         radii = self.radii[(None,) * shape_diff].to(raw_data.device)
-        rbf = torch.exp(-torch.clamp_max(torch.square((radii - raw_data) / self.sigma_sq), 50))
+        rbf = torch.exp(
+            -torch.clamp_max(torch.square((radii - raw_data) / self.sigma_sq), 50)
+        )
         return rbf
 
 
@@ -143,8 +153,14 @@ class FeatFourierEncoding(nn.Module):  # noqa
         """fourier encode the features"""
         with torch.no_grad():
             to_encode = feat.get_raw_data()
-            assert to_encode.shape[-1] == self.mult, f"{to_encode.shape},{self.mult},{feat.name}"
-            return fourier_encode(feat.get_raw_data(), num_encodings=self.n_feats, include_self=self.include_self)
+            assert (
+                to_encode.shape[-1] == self.mult
+            ), f"{to_encode.shape},{self.mult},{feat.name}"
+            return fourier_encode(
+                feat.get_raw_data(),
+                num_encodings=self.n_feats,
+                include_self=self.include_self,
+            )
 
 
 def count_embedding_dim(embeddings) -> int:
@@ -167,7 +183,9 @@ def get_embeddings(
     if FeatureEmbeddingTy.EMBED in embed_tys:
         embeddings["emb"] = FeatEmbedding(n_classes, embed_dim, mult=mult)
     if FeatureEmbeddingTy.ONEHOT in embed_tys:
-        embeddings["one_hot"] = FeatOneHotEncoding(num_classes=n_classes, mult=mult, std_noise=std_noise)
+        embeddings["one_hot"] = FeatOneHotEncoding(
+            num_classes=n_classes, mult=mult, std_noise=std_noise
+        )
     if FeatureEmbeddingTy.FOURIER in embed_tys:
         embeddings["fourier"] = FeatFourierEncoding(n_feats=fourier_feats, mult=mult)
     if FeatureEmbeddingTy.NONE in embed_tys:
@@ -194,7 +212,9 @@ class InputEmbedding(nn.Module):  # noqa
         """Get pair and scalar input features"""
         leading_shape = (feats.batch_size, feats.length)
         scalar_feats = self.get_scalar_input(feats, leading_shape)
-        pair_feats = self.get_pair_input(feats, (*leading_shape, leading_shape[-1]))  # noqa
+        pair_feats = self.get_pair_input(
+            feats, (*leading_shape, leading_shape[-1])
+        )  # noqa
         # logger.info(f"scalar shape : {scalar_feats.shape}, expected : {self.scalar_dim}")
         # logger.info(f"pair shape : {pair_feats.shape}, expected : {self.pair_dim}")
         return scalar_feats.float(), pair_feats.float()
@@ -216,7 +236,9 @@ class InputEmbedding(nn.Module):  # noqa
         pad = 1 if config.pad_embeddings else 0
         scalar_dim, pair_dim = 0, 0
         scalar_embeddings, pair_embeddings = nn.ModuleDict(), nn.ModuleDict()
-        get_embed_dict = lambda ty: scalar_embeddings if ty == FeatureTy.RESIDUE else pair_embeddings
+        get_embed_dict = (
+            lambda ty: scalar_embeddings if ty == FeatureTy.RESIDUE else pair_embeddings
+        )
         for descriptor in config.descriptors:
             name = descriptor.name.value
             # print(f"[INFO] adding embeddings for {name}:"
@@ -239,7 +261,8 @@ class InputEmbedding(nn.Module):  # noqa
             pair_dim -= 2 * config.joint_embed_res_pair_rel_sep_embed_dim
             pair_embeddings[name] = nn.ModuleDict()
             pair_embeddings[name][FeatureName.REL_SEP.value] = FeatEmbedding(
-                len(config.rel_sep_encode_bins) + pad, config.joint_embed_res_pair_rel_sep_embed_dim
+                len(config.rel_sep_encode_bins) + pad,
+                config.joint_embed_res_pair_rel_sep_embed_dim,
             )
             pair_embeddings[name][FeatureName.RES_TY.value + "_a"] = FeatEmbedding(
                 len(AA_ALPHABET) + pad, config.joint_embed_res_pair_rel_sep_embed_dim
@@ -248,8 +271,12 @@ class InputEmbedding(nn.Module):  # noqa
                 len(AA_ALPHABET) + pad, config.joint_embed_res_pair_rel_sep_embed_dim
             )
 
-        scalar_dim += sum([count_embedding_dim(e.values()) for e in scalar_embeddings.values()])
-        pair_dim += sum([count_embedding_dim(e.values()) for e in pair_embeddings.values()])
+        scalar_dim += sum(
+            [count_embedding_dim(e.values()) for e in scalar_embeddings.values()]
+        )
+        pair_dim += sum(
+            [count_embedding_dim(e.values()) for e in pair_embeddings.values()]
+        )
         return (scalar_dim, pair_dim), (scalar_embeddings, pair_embeddings)
 
     def get_feat_dict(
@@ -276,7 +303,9 @@ class InputEmbedding(nn.Module):  # noqa
             feat_embeddings = embs[feat_id.value]
             leading_shape = (1, n) if is_scalar else (1, n, n)
             if feat.name == FeatureName.REL_SEP.value:
-                rs_bins = len(self.config.rel_sep_encode_bins) + int(self.config.pad_embeddings)
+                rs_bins = len(self.config.rel_sep_encode_bins) + int(
+                    self.config.pad_embeddings
+                )
                 rel_sep = features[FeatureName.REL_SEP.value].get_encoded_data()
                 one_hot = torch.nn.functional.one_hot(rel_sep, rs_bins)
                 feat_dict[FeatureName.REL_SEP.value] = one_hot.reshape(1, n, n, -1)
@@ -304,7 +333,9 @@ class InputEmbedding(nn.Module):  # noqa
                 for emb_name, emb in feat_embeddings.items():
                     emb_feat = emb(feat).reshape(*leading_shape, -1)
                     scalar_feats.append(emb_feat)
-        scalar_feats = torch.cat(scalar_feats, dim=-1) if len(scalar_feats) > 0 else None
+        scalar_feats = (
+            torch.cat(scalar_feats, dim=-1) if len(scalar_feats) > 0 else None
+        )
         return scalar_feats
 
     def get_pair_input(
@@ -332,11 +363,19 @@ class InputEmbedding(nn.Module):  # noqa
             joint_embs = self.pair_embeddings["joint_pair_n_sep"]
             res_ty = features[FeatureName.RES_TY.value]
             sep = features[FeatureName.REL_SEP.value]
-            emb_sep = joint_embs[FeatureName.REL_SEP.value](sep).reshape(*leading_shape, -1)
-            emb_a = joint_embs[FeatureName.RES_TY.value + "_a"](res_ty).reshape(*leading_shape[:-1], -1)
-            emb_b = joint_embs[FeatureName.RES_TY.value + "_b"](res_ty).reshape(*leading_shape[:-1], -1)
+            emb_sep = joint_embs[FeatureName.REL_SEP.value](sep).reshape(
+                *leading_shape, -1
+            )
+            emb_a = joint_embs[FeatureName.RES_TY.value + "_a"](res_ty).reshape(
+                *leading_shape[:-1], -1
+            )
+            emb_b = joint_embs[FeatureName.RES_TY.value + "_b"](res_ty).reshape(
+                *leading_shape[:-1], -1
+            )
             joint_emb = (
-                rearrange(emb_a, "... n d-> ... n () d") + rearrange(emb_b, "... n d-> ... () n d") + emb_sep
+                rearrange(emb_a, "... n d-> ... n () d")
+                + rearrange(emb_b, "... n d-> ... () n d")
+                + emb_sep
             )  # noqa
             pair_feats.append(joint_emb)
 
@@ -353,7 +392,9 @@ def _print_embedding_info(scalar_embs, pair_embs, scalar_dim, pair_dim):
         for feat_ty in embs:
             print(f"{tab}{tab}{feat_ty}")
             for emb_ty in embs[feat_ty]:
-                print(f"{tab}{tab}{tab}{emb_ty} : {embs[feat_ty][emb_ty].embedding_dim}")
+                print(
+                    f"{tab}{tab}{tab}{emb_ty} : {embs[feat_ty][emb_ty].embedding_dim}"
+                )
         print()
 
     print(f"{tab}[INFO] SCALAR (dim = {scalar_dim})\n")

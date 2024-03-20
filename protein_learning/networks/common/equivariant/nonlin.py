@@ -1,9 +1,8 @@
 import torch
-from torch import einsum
-from torch import nn
+from torch import einsum, nn
 
-from protein_learning.networks.common.equivariant.norm import CoordNorm
 from protein_learning.networks.common.constants import EPS
+from protein_learning.networks.common.equivariant.norm import CoordNorm
 from protein_learning.networks.common.utils import default
 
 
@@ -22,10 +21,10 @@ class PhaseNorm(nn.Module):
     """
 
     def __init__(
-            self,
-            dim_in,
-            nonlin=nn.GELU(),
-            eps=1e-5,
+        self,
+        dim_in,
+        nonlin=nn.GELU(),
+        eps=1e-5,
     ):
         """
         :param dim_in: input dimension of point features
@@ -63,15 +62,27 @@ class VNReLUABC(nn.Module):
     "Vector Neurons: A General Framework for SO(3)-Equivariant Networks"
     """
 
-    def __init__(self, dim_in, share_nonlinearity, map_feats,
-                 negative_slope, eps, dim_out=None, use_norm=True, norm=None,
-                 n_dims=4, init_eps=EPS):  # noqa
+    def __init__(
+        self,
+        dim_in,
+        share_nonlinearity,
+        map_feats,
+        negative_slope,
+        eps,
+        dim_out=None,
+        use_norm=True,
+        norm=None,
+        n_dims=4,
+        init_eps=EPS,
+    ):  # noqa
         super().__init__()
         self.dim_in = dim_in
         dim_out = default(dim_out, self.dim_in)
         self.eps = eps
         self.negative_slope = negative_slope
-        self.U, self.W = self.get_U_and_W(dim_in, dim_out, map_feats, share_nonlinearity, scale=init_eps)
+        self.U, self.W = self.get_U_and_W(
+            dim_in, dim_out, map_feats, share_nonlinearity, scale=init_eps
+        )
         norm = default(norm, CoordNorm) if use_norm else nn.Identity
         self.norm = norm(dim_out, nonlin=nn.Identity(), beta_init=1e-1)  # noqa
         self.map_feats = map_feats
@@ -87,15 +98,19 @@ class VNReLUABC(nn.Module):
         slope = self.negative_slope
         directions, proj = self.U, self.W
         # get inner product of featuers and learned directions
-        x_proj = x if not self.map_feats else einsum('i j , ... j k -> ... i k', proj, x)
+        x_proj = (
+            x if not self.map_feats else einsum("i j , ... j k -> ... i k", proj, x)
+        )
         Q = self.norm(x_proj)
-        K = einsum('i j , ... j k -> ... i k', directions, x)
+        K = einsum("i j , ... j k -> ... i k", directions, x)
         # normalize and project entries with inner product <0
         QK = torch.sum(Q * K, dim=-1, keepdim=True)
         K_normed = K / (torch.norm(K, dim=-1, keepdim=True) + self.eps)
         proj_mask = (QK >= 0).float()
         resid = 0 if slope == 0 else (slope * Q)
-        return resid + (1 - slope) * (Q * proj_mask + (1 - proj_mask) * (Q - (QK * K_normed)))
+        return resid + (1 - slope) * (
+            Q * proj_mask + (1 - proj_mask) * (Q - (QK * K_normed))
+        )
 
 
 class VNLinearReLU(VNReLUABC):
@@ -112,12 +127,29 @@ class VNLinearReLU(VNReLUABC):
     "Vector Neurons: A General Framework for SO(3)-Equivariant Networks"
     """
 
-    def __init__(self, dim_in: int, dim_out: int = None, eps=1e-5,
-                 share_nonlinearity=False, n_dims=4, init_eps=EPS, use_norm=True,
-                 norm=None):
-        super().__init__(dim_in, share_nonlinearity=share_nonlinearity, map_feats=True,
-                         negative_slope=0, eps=eps, dim_out=dim_out, n_dims=n_dims,
-                         init_eps=init_eps, use_norm=use_norm, norm=norm)
+    def __init__(
+        self,
+        dim_in: int,
+        dim_out: int = None,
+        eps=1e-5,
+        share_nonlinearity=False,
+        n_dims=4,
+        init_eps=EPS,
+        use_norm=True,
+        norm=None,
+    ):
+        super().__init__(
+            dim_in,
+            share_nonlinearity=share_nonlinearity,
+            map_feats=True,
+            negative_slope=0,
+            eps=eps,
+            dim_out=dim_out,
+            n_dims=n_dims,
+            init_eps=init_eps,
+            use_norm=use_norm,
+            norm=norm,
+        )
 
 
 class VNReLU(VNReLUABC):
@@ -133,11 +165,27 @@ class VNReLU(VNReLUABC):
     "Vector Neurons: A General Framework for SO(3)-Equivariant Networks"
     """
 
-    def __init__(self, dim_in: int, eps=1e-5, share_nonlinearity=False, n_dims=4,
-                 init_eps=EPS, use_norm=True, norm=None):
-        super().__init__(dim_in, share_nonlinearity=share_nonlinearity,
-                         map_feats=False, negative_slope=0, eps=eps, n_dims=n_dims,
-                         init_eps=init_eps, use_norm=use_norm, norm=norm)
+    def __init__(
+        self,
+        dim_in: int,
+        eps=1e-5,
+        share_nonlinearity=False,
+        n_dims=4,
+        init_eps=EPS,
+        use_norm=True,
+        norm=None,
+    ):
+        super().__init__(
+            dim_in,
+            share_nonlinearity=share_nonlinearity,
+            map_feats=False,
+            negative_slope=0,
+            eps=eps,
+            n_dims=n_dims,
+            init_eps=init_eps,
+            use_norm=use_norm,
+            norm=norm,
+        )
 
 
 class VNLeakyReLU(VNReLUABC):
@@ -146,11 +194,28 @@ class VNLeakyReLU(VNReLUABC):
     The "Leaky" version of VNReLU
     """
 
-    def __init__(self, dim_in: int, negative_slope=0.2, share_nonlinearity=False, eps=1e-5,
-                 n_dims=4, init_eps=EPS, use_norm=True, norm=None):
-        super().__init__(dim_in, share_nonlinearity=share_nonlinearity,
-                         map_feats=False, negative_slope=negative_slope, eps=eps,
-                         n_dims=n_dims, init_eps=init_eps, use_norm=use_norm, norm=norm)
+    def __init__(
+        self,
+        dim_in: int,
+        negative_slope=0.2,
+        share_nonlinearity=False,
+        eps=1e-5,
+        n_dims=4,
+        init_eps=EPS,
+        use_norm=True,
+        norm=None,
+    ):
+        super().__init__(
+            dim_in,
+            share_nonlinearity=share_nonlinearity,
+            map_feats=False,
+            negative_slope=negative_slope,
+            eps=eps,
+            n_dims=n_dims,
+            init_eps=init_eps,
+            use_norm=use_norm,
+            norm=norm,
+        )
 
 
 class VNLinearLeakyReLU(VNReLUABC):
@@ -159,8 +224,27 @@ class VNLinearLeakyReLU(VNReLUABC):
     The "Leaky" version of VNLinearReLU
     """
 
-    def __init__(self, dim_in: int, fiber_out=None, negative_slope=0.2, share_nonlinearity=False, eps=1e-5,
-                 n_dims=4, init_eps=EPS, use_norm=True, norm=None):
-        super().__init__(dim_in, share_nonlinearity=share_nonlinearity,
-                         map_feats=True, negative_slope=negative_slope, eps=eps, dim_out=fiber_out,
-                         n_dims=n_dims, init_eps=init_eps, use_norm=use_norm, norm=norm)
+    def __init__(
+        self,
+        dim_in: int,
+        fiber_out=None,
+        negative_slope=0.2,
+        share_nonlinearity=False,
+        eps=1e-5,
+        n_dims=4,
+        init_eps=EPS,
+        use_norm=True,
+        norm=None,
+    ):
+        super().__init__(
+            dim_in,
+            share_nonlinearity=share_nonlinearity,
+            map_feats=True,
+            negative_slope=negative_slope,
+            eps=eps,
+            dim_out=fiber_out,
+            n_dims=n_dims,
+            init_eps=init_eps,
+            use_norm=use_norm,
+            norm=norm,
+        )

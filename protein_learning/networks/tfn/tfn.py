@@ -1,20 +1,25 @@
-from typing import Dict, Tuple, Optional
-
-from einops import rearrange  # noqa
-from torch import nn
-
-from protein_learning.networks.common.helpers.neighbor_utils import NeighborInfo
-from protein_learning.networks.common.helpers.torch_utils import batched_index_select, masked_mean
-from protein_learning.networks.common.utils import exists, default
-from protein_learning.networks.tfn.repr.fiber import default_tymap, to_order
-from protein_learning.networks.common.equivariant.fiber_units import FiberLinear, FiberResidual
-import torch.nn.functional as F  # noqa
-from torch import Tensor
-import torch.utils.checkpoint as checkpoint
-from protein_learning.networks.common.helpers.torch_utils import fused_gelu as GELU  # noqa
-from protein_learning.networks.tfn.tfn_config import TFNConfig
-from protein_learning.networks.common.net_utils import SplitLinear
 from functools import partial
+from typing import Dict, Optional, Tuple
+
+import torch.nn.functional as F  # noqa
+import torch.utils.checkpoint as checkpoint
+from einops import rearrange  # noqa
+from torch import Tensor, nn
+
+from protein_learning.networks.common.equivariant.fiber_units import (
+    FiberLinear,
+    FiberResidual,
+)
+from protein_learning.networks.common.helpers.neighbor_utils import NeighborInfo
+from protein_learning.networks.common.helpers.torch_utils import batched_index_select
+from protein_learning.networks.common.helpers.torch_utils import (
+    fused_gelu as GELU,
+)  # noqa
+from protein_learning.networks.common.helpers.torch_utils import masked_mean
+from protein_learning.networks.common.net_utils import SplitLinear
+from protein_learning.networks.common.utils import default, exists
+from protein_learning.networks.tfn.repr.fiber import default_tymap, to_order
+from protein_learning.networks.tfn.tfn_config import TFNConfig
 
 
 class ConvSE3(nn.Module):
@@ -51,7 +56,9 @@ class ConvSE3(nn.Module):
             self.self_interact = FiberLinear(config.fiber_in, config.fiber_out)
             self.self_interact_sum = FiberResidual(safe_mode=True)
 
-        self.ty_map = default(config.ty_map, default_tymap(config.fiber_in, config.fiber_out))
+        self.ty_map = default(
+            config.ty_map, default_tymap(config.fiber_in, config.fiber_out)
+        )
 
     def forward(
         self,
@@ -70,7 +77,10 @@ class ConvSE3(nn.Module):
         edges, neighbor_info = edge_info
         neighbor_indices, neighbor_masks = neighbor_info.indices, neighbor_info.mask
         # select neighbors for graph convolution
-        selected_input = {deg: batched_index_select(x, neighbor_indices, dim=1) for deg, x in features.items()}
+        selected_input = {
+            deg: batched_index_select(x, neighbor_indices, dim=1)
+            for deg, x in features.items()
+        }
         edge_features = config.get_edge_features(edges=edges, nbr_info=neighbor_info)
 
         # go through every permutation of input degree type to output degree type
@@ -90,14 +100,22 @@ class ConvSE3(nn.Module):
                 # process input, edges, and basis in chunks along the sequence dimension
                 _basis = basis[f"{degree_in},{degree_out}"]
                 if config.checkpoint and self.training:
-                    kernel_out = checkpoint.checkpoint(kernel_fn.forward, edge_features, x, _basis)
+                    kernel_out = checkpoint.checkpoint(
+                        kernel_fn.forward, edge_features, x, _basis
+                    )
                 else:
                     kernel_out = kernel_fn(edge_features, x, _basis)
                 output = output + kernel_out
 
-            output = output.view(*x.shape[:3], -1, to_order(degree_out))  # noqa added reshape before mean
+            output = output.view(
+                *x.shape[:3], -1, to_order(degree_out)
+            )  # noqa added reshape before mean
             if config.pool:
-                output = masked_mean(output, neighbor_masks, dim=2) if exists(neighbor_masks) else output.mean(dim=2)
+                output = (
+                    masked_mean(output, neighbor_masks, dim=2)
+                    if exists(neighbor_masks)
+                    else output.mean(dim=2)
+                )
 
             leading_shape = x.shape[:2] if config.pool else x.shape[:3]
             output = output.view(*leading_shape, -1, to_order(degree_out))
@@ -136,14 +154,21 @@ class PairwiseConv(nn.Module):
         self.d_out = to_order(degree_out)
         self.edge_dim = edge_dim
         self.rp = RadialFunc(
-            self.num_freq, nc_in, nc_out, edge_dim, dropout=radial_dropout, mid_dim=int(edge_dim * radial_mult)
+            self.num_freq,
+            nc_in,
+            nc_out,
+            edge_dim,
+            dropout=radial_dropout,
+            mid_dim=int(edge_dim * radial_mult),
         )
 
     def forward(self, edges, feats, basis) -> Tensor:
         out_shape = (*feats.shape[:3], -1, to_order(self.degree_out))
         feats = feats.view(-1, self.nc_in, to_order(self.degree_in))
         num_edges, in_dim = feats.shape[0], to_order(self.degree_in)
-        radial_weights = self.rp(edges).view(-1, self.nc_out, self.nc_in * self.num_freq)
+        radial_weights = self.rp(edges).view(
+            -1, self.nc_out, self.nc_in * self.num_freq
+        )
         tmp = (feats @ basis).view(num_edges, -1, self.d_out)
         return (radial_weights @ tmp).view(out_shape)
 
@@ -174,7 +199,9 @@ class FusedConv(nn.Module):
             nn.Linear(mid_dim, mid_dim),
             GELU,
             nn.Dropout(radial_dropout) if radial_dropout > 0 else nn.Identity(),
-            SplitLinear(mid_dim, dim_out=sum(split_sizes), sizes=split_sizes, bias=False),
+            SplitLinear(
+                mid_dim, dim_out=sum(split_sizes), sizes=split_sizes, bias=False
+            ),
         )
 
     def radial_weights(self, edges, key):
@@ -183,7 +210,9 @@ class FusedConv(nn.Module):
             rp = self.rp(edges)
             for i, k in enumerate(self.dims):
                 di, mi, do, mo = self.dims[k]
-                self._radial_weights[k] = rearrange(rp[i], "... (o i f) -> ... o () i () f", i=mi, o=mo)
+                self._radial_weights[k] = rearrange(
+                    rp[i], "... (o i f) -> ... o () i () f", i=mi, o=mo
+                )
         return self._radial_weights[key]
 
     def forward(self, edges, feats, basis, key) -> Tensor:
@@ -250,4 +279,6 @@ class RadialFunc(nn.Module):
             )
 
     def forward(self, x) -> Tensor:
-        return rearrange(self.net(x), "... (o i f) -> ... o () i () f", i=self.in_dim, o=self.out_dim)
+        return rearrange(
+            self.net(x), "... (o i f) -> ... o () i () f", i=self.in_dim, o=self.out_dim
+        )

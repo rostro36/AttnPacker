@@ -1,11 +1,18 @@
-import torch
-from torch import Tensor, einsum
-from protein_learning.networks.common.helpers.torch_utils import to_rel_pos, ndim, get_max_neg_value, safe_norm
-from einops import rearrange
-from math import sqrt
-from protein_learning.networks.common.utils import exists
 from enum import Enum
+from math import sqrt
 from typing import Dict, Optional
+
+import torch
+from einops import rearrange
+from torch import Tensor, einsum
+
+from protein_learning.networks.common.helpers.torch_utils import (
+    get_max_neg_value,
+    ndim,
+    safe_norm,
+    to_rel_pos,
+)
+from protein_learning.networks.common.utils import exists
 
 """Helper Methods for Equivariant Attention
 
@@ -51,11 +58,15 @@ def compute_hidden_rel_coords(initial_coords: Tensor, coord_feats: Tensor) -> Te
     :return: tensor of shape (b,...,n,n,d,3)
     """
     assert not initial_coords.requires_grad
-    hidden_coords = compute_hidden_coords(initial_coords=initial_coords, coord_feats=coord_feats)
+    hidden_coords = compute_hidden_coords(
+        initial_coords=initial_coords, coord_feats=coord_feats
+    )
     return to_rel_pos(hidden_coords)
 
 
-def get_rel_dists(initial_coords: Tensor, coord_feats: Tensor, normalize_dists: bool) -> Tensor:
+def get_rel_dists(
+    initial_coords: Tensor, coord_feats: Tensor, normalize_dists: bool
+) -> Tensor:
     """
     Appends the relative distance between hidden coordinates i_k and j_k to the
     edge features, where k = 1..d indexes the hidden dimension of coordinate features
@@ -70,19 +81,24 @@ def get_rel_dists(initial_coords: Tensor, coord_feats: Tensor, normalize_dists: 
     (reccomended).
     :return: Tensor of shape (...,n,n,d) where d is the coordinate feature hidden dimension
     """
-    assert coord_feats.shape[-1] == 3, \
-        f"coordinate features must have 3 as trailing dimension, got shape {coord_feats.shape}"
+    assert (
+        coord_feats.shape[-1] == 3
+    ), f"coordinate features must have 3 as trailing dimension, got shape {coord_feats.shape}"
 
     hidden_rel_coords = compute_hidden_rel_coords(
         initial_coords=initial_coords, coord_feats=coord_feats
     )
     pairwise_dists = torch.norm(hidden_rel_coords, dim=-1)
     s = sqrt(coord_feats.shape[-2]) / 2
-    scale = safe_norm(pairwise_dists, dim=-1, keepdim=True) / s if normalize_dists else None
+    scale = (
+        safe_norm(pairwise_dists, dim=-1, keepdim=True) / s if normalize_dists else None
+    )
     return pairwise_dists / scale if exists(scale) else pairwise_dists
 
 
-def get_degree_scale_for_attn(feat_degree: int, dim_head: int, sim_ty: SimilarityType) -> float:
+def get_degree_scale_for_attn(
+    feat_degree: int, dim_head: int, sim_ty: SimilarityType
+) -> float:
     """
     :param feat_degree: 1 for scalar features and 3 for coordinate features.
     :param dim_head: head dimension
@@ -101,14 +117,13 @@ def get_degree_scale_for_attn(feat_degree: int, dim_head: int, sim_ty: Similarit
 
 
 def get_similarity(
-        keys: Tensor,
-        queries: Tensor,
-        sim_ty: SimilarityType,
-        bias: Optional[Tensor] = None,
-        initial_coords: Optional[Tensor] = None,
-        scale: Optional[float] = None,
-        dist_scale: Optional[float] = 0.1,
-
+    keys: Tensor,
+    queries: Tensor,
+    sim_ty: SimilarityType,
+    bias: Optional[Tensor] = None,
+    initial_coords: Optional[Tensor] = None,
+    scale: Optional[float] = None,
+    dist_scale: Optional[float] = 0.1,
 ) -> Tensor:
     """Computes Multihead similarity scores (used to derive attention weights).
 
@@ -132,7 +147,7 @@ def get_similarity(
             raise Exception("must include initial coords if using Distance Similarity!")
 
     if feat_degree == 1 or sim_ty == SimilarityType.DOT_PROD:
-        sim = einsum('b h i d m, b h i j d m -> b h i j', q, k)
+        sim = einsum("b h i d m, b h i j d m -> b h i j", q, k)
 
     if feat_degree == 3:
         if sim_ty == SimilarityType.DISTANCE:
@@ -150,10 +165,10 @@ def get_similarity(
 
 
 def get_attn_weights_from_sim(
-        sims: Dict[str, Tensor],
-        neighbor_mask: Optional[Tensor],
-        attn_ty: AttentionType,
-        shared_scale: Optional[float] = None,
+    sims: Dict[str, Tensor],
+    neighbor_mask: Optional[Tensor],
+    attn_ty: AttentionType,
+    shared_scale: Optional[float] = None,
 ) -> Dict[str, Tensor]:
     """Computes attention weights for input feature types
 
